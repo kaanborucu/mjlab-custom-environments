@@ -28,6 +28,12 @@ Changed
 - Added README commands for training and playing the Crawler rough-terrain and
   flat-terrain teacher/student pairs.
 
+Fixed
+^^^^^
+
+- Reduced the Quad Mini per-world contact allocation so training with thousands
+  of parallel environments no longer exhausts GPU memory during initialization.
+
 Version 1.6.0 (August 8, 2026)
 ------------------------------
 
