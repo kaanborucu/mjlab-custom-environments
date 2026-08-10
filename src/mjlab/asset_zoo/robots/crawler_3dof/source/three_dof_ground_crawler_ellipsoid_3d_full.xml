@@ -1,0 +1,208 @@
+<mujoco model="three_dof_ground_crawler_ellipsoid_3d">
+  <!--
+    Minimal 3-DoF crawling robot for MuJoCo / MJLab.
+
+    Structure:
+      segment_0 - joint_1 - segment_1 - joint_2 - segment_2 - joint_3 - segment_3
+
+    Geometry:
+      * Every body segment uses a long ellipsoid for collision.
+      * Every body segment uses an identical long ellipsoid for visualization.
+      * No wheels, legs, pads, or other contact devices.
+
+    Joint-axis arrangement:
+      * joint_1: yaw about the local Z axis.
+      * joint_2: pitch about the local Y axis.
+      * joint_3: pitch about the local Y axis.
+
+    This gives a genuine 3D configuration space instead of three planar yaw joints.
+    All joint and actuator command limits are -90 to +90 degrees.
+  -->
+
+  <compiler angle="radian" autolimits="true" inertiafromgeom="true"/>
+
+  <option
+    timestep="0.002"
+    gravity="0 0 -9.81"
+    integrator="implicitfast"
+    solver="Newton"
+    iterations="50"
+    noslip_iterations="5"/>
+
+  <size nconmax="200" njmax="1000"/>
+
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="135" elevation="-25"/>
+  </visual>
+
+  <statistic center="0.29 0 0.06" extent="0.85"/>
+
+  <default>
+    <!--
+      Long ellipsoid collision geometry.
+      MuJoCo ellipsoid size values are the X, Y and Z radii.
+      Current full dimensions are 140 x 60 x 36 mm.
+    -->
+    <default class="link_collision">
+      <geom
+        type="ellipsoid"
+        size="0.070 0.030 0.018"
+        mass="0.055"
+        friction="1.10 0.005 0.0001"
+        solref="0.006 1"
+        solimp="0.90 0.95 0.001"
+        condim="4"
+        contype="1"
+        conaffinity="1"
+        margin="0.001"
+        rgba="0 0 0 0"/>
+    </default>
+
+    <!-- Identical ellipsoid used only for visualization. -->
+    <default class="link_visual">
+      <geom
+        type="ellipsoid"
+        size="0.070 0.030 0.018"
+        contype="0"
+        conaffinity="0"
+        group="1"/>
+    </default>
+
+    <!--
+      Servo mass near each hinge. It contributes mass/inertia but is invisible
+      and non-colliding, so the visible robot remains purely ellipsoidal.
+    -->
+    <default class="servo_mass">
+      <geom
+        type="ellipsoid"
+        size="0.0203 0.0103 0.0200"
+        mass="0.063"
+        rgba="0 0 0 0"
+        contype="0"
+        conaffinity="0"
+        group="3"/>
+    </default>
+
+    <!-- -90 to +90 degrees. Axis is overridden per joint below. -->
+    <default class="crawler_joint">
+      <joint
+        type="hinge"
+        range="-1.5707963268 1.5707963268"
+        limited="true"
+        damping="0.30"
+        armature="0.002"
+        frictionloss="0.05"
+        margin="0.035"
+        solreflimit="0.004 1"
+        solimplimit="0.90 0.99 0.001"/>
+    </default>
+
+    <!-- Position command limits also equal -90 to +90 degrees. -->
+    <default class="crawler_servo">
+      <position
+        kp="35"
+        ctrlrange="-1.5707963268 1.5707963268"
+        ctrllimited="true"
+        forcerange="-2.0 2.0"
+        forcelimited="true"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture name="ground_tex" type="2d" builtin="checker"
+             rgb1="0.18 0.22 0.18" rgb2="0.28 0.32 0.28"
+             width="512" height="512"/>
+    <material name="ground_mat" texture="ground_tex" texrepeat="8 8" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light name="key_light" pos="0 0 2.5" dir="0 0 -1" directional="true"/>
+
+    <geom
+      name="ground"
+      type="plane"
+      size="5 5 0.1"
+      material="ground_mat"
+      friction="1.10 0.005 0.0001"
+      condim="4"
+      contype="1"
+      conaffinity="1"/>
+
+    <!-- Root height equals the ellipsoid's vertical radius plus a small clearance. -->
+    <body name="segment_0" pos="0 0 0.019">
+      <freejoint name="root"/>
+
+      <!-- Segment 0 extends from x=0.00 to x=0.14 m. -->
+      <geom name="segment_0_collision" class="link_collision" pos="0.070 0 0"/>
+      <geom name="segment_0_visual" class="link_visual" pos="0.070 0 0"
+            rgba="0.10 0.28 0.55 1"/>
+
+      <site name="imu_site" pos="0.070 0 0.022" size="0.008" rgba="1 0.2 0.2 1"/>
+      <site name="base_reference" pos="0.070 0 0" size="0.006" rgba="0.2 1 0.2 1"/>
+
+      <!-- Joint 1: yaw around local Z. -->
+      <body name="segment_1" pos="0.140 0 0">
+        <joint name="joint_1" class="crawler_joint" axis="0 0 1"/>
+        <geom name="servo_1_mass" class="servo_mass" pos="0 0 0"/>
+        <geom name="segment_1_collision" class="link_collision" pos="0.070 0 0"/>
+        <geom name="segment_1_visual" class="link_visual" pos="0.070 0 0"
+              rgba="0.12 0.40 0.70 1"/>
+
+        <!-- Joint 2: pitch around local Y. -->
+        <body name="segment_2" pos="0.140 0 0">
+          <joint name="joint_2" class="crawler_joint" axis="0 1 0"/>
+          <geom name="servo_2_mass" class="servo_mass" pos="0 0 0"/>
+          <geom name="segment_2_collision" class="link_collision" pos="0.070 0 0"/>
+          <geom name="segment_2_visual" class="link_visual" pos="0.070 0 0"
+                rgba="0.12 0.52 0.72 1"/>
+
+          <!-- Joint 3: pitch around local Y. -->
+          <body name="segment_3" pos="0.140 0 0">
+            <joint name="joint_3" class="crawler_joint" axis="0 1 0"/>
+            <geom name="servo_3_mass" class="servo_mass" pos="0 0 0"/>
+            <geom name="segment_3_collision" class="link_collision" pos="0.070 0 0"/>
+            <geom name="segment_3_visual" class="link_visual" pos="0.070 0 0"
+                  rgba="0.15 0.62 0.66 1"/>
+
+            <site name="tail_tip" pos="0.140 0 0" size="0.007" rgba="1 0.8 0.1 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Control values are desired joint angles in radians. -->
+    <position name="servo_1" class="crawler_servo" joint="joint_1"/>
+    <position name="servo_2" class="crawler_servo" joint="joint_2"/>
+    <position name="servo_3" class="crawler_servo" joint="joint_3"/>
+  </actuator>
+
+  <sensor>
+    <!-- Joint feedback matching the three modified physical servos. -->
+    <jointpos name="joint_1_pos" joint="joint_1"/>
+    <jointpos name="joint_2_pos" joint="joint_2"/>
+    <jointpos name="joint_3_pos" joint="joint_3"/>
+
+    <jointvel name="joint_1_vel" joint="joint_1"/>
+    <jointvel name="joint_2_vel" joint="joint_2"/>
+    <jointvel name="joint_3_vel" joint="joint_3"/>
+
+    <!-- Body sensing for RL observations. -->
+    <framequat name="base_quat" objtype="site" objname="imu_site"/>
+    <gyro name="base_gyro" site="imu_site"/>
+    <accelerometer name="base_accelerometer" site="imu_site"/>
+
+    <!-- Simulator-only measurements for rewards and debugging. -->
+    <framelinvel name="base_linear_velocity" objtype="site" objname="base_reference"/>
+    <frameangvel name="base_angular_velocity" objtype="site" objname="base_reference"/>
+    <framepos name="base_position" objtype="site" objname="base_reference"/>
+  </sensor>
+
+  <keyframe>
+    <!-- qpos: root xyz, root quaternion, joint_1, joint_2, joint_3 -->
+    <key name="straight" qpos="0 0 0.019 1 0 0 0 0 0 0" ctrl="0 0 0"/>
+  </keyframe>
+</mujoco>
