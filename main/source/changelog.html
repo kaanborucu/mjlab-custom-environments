@@ -572,6 +572,8 @@ flat-terrain teacher/student pairs.</p></li>
 <ul class="simple">
 <li><p>Reduced the Quad Mini per-world contact allocation so training with thousands
 of parallel environments no longer exhausts GPU memory during initialization.</p></li>
+<li><p>Clipped Quad Mini policy actions to the normalized <code class="docutils literal notranslate"><span class="pre">[-1,</span> <span class="pre">1]</span></code> range before
+applying joint-position targets, matching the Bird and Crawler runners.</p></li>
 </ul>
 </section>
 </section>
