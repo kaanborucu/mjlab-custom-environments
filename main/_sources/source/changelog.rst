@@ -15,6 +15,8 @@ Added
 - Added the Quad Mini Tuned flat-terrain joystick environment, including its
   12-joint asset, source-matched observations and rewards, domain randomization,
   and focused integration tests.
+- Added README instructions for checking, training, and pushing the custom
+  Bird, Crawler, and Quad Mini environments.
 
 Version 1.6.0 (August 8, 2026)
 ------------------------------
