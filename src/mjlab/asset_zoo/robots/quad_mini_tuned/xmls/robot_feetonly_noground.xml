@@ -1,0 +1,620 @@
+<mujoco model="quad_mini_tuned_base_feet_noground">
+  <compiler angle="radian" meshdir="../meshes/"/>
+  <default>
+    <default class="visual">
+      <geom type="mesh" contype="0" conaffinity="0" group="1"/>
+    </default>
+
+    <default class="foot_visual">
+      <geom
+          type="sphere"
+          size="0.022"
+          rgba="0 0 0 1"
+          contype="0"
+          conaffinity="0"
+          group="1"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture
+        name="texplane"
+        type="2d"
+        builtin="checker"
+        rgb1=".2 .3 .4"
+        rgb2=".1 0.15 0.2"
+        width="512"
+        height="512"
+        mark="cross"
+        markrgb=".8 .8 .8"/>
+    <material name="metal" rgba="0.6 0.6 0.6 1"/>
+    <material name="orange" rgba="0.82 0.42 0.21 1"/>
+    <material name="black" rgba="0 0 0 1"/>
+    <material name="blue" rgba="0.2 0.6 1 1"/>
+    <material
+        name="matplane"
+        reflectance="0.0"
+        texture="texplane"
+        texrepeat="1 1"
+        texuniform="true"/>
+
+    <mesh name="base_mesh" file="base_link.obj"/>
+
+    <mesh name="FL_hip_mesh" file="FL_HipX.obj"/>
+    <mesh name="FL_thigh_mesh" file="FL_HipY.obj"/>
+    <mesh name="FL_calf_mesh" file="FL_Knee.obj"/>
+
+    <mesh name="FR_hip_mesh" file="FR_HipX.obj"/>
+    <mesh name="FR_thigh_mesh" file="FR_HipY.obj"/>
+    <mesh name="FR_calf_mesh" file="FR_Knee.obj"/>
+
+    <mesh name="HL_hip_mesh" file="HL_HipX.obj"/>
+    <mesh name="HL_thigh_mesh" file="HL_HipY.obj"/>
+    <mesh name="HL_calf_mesh" file="HL_Knee.obj"/>
+
+    <mesh name="HR_hip_mesh" file="HR_HipX.obj"/>
+    <mesh name="HR_thigh_mesh" file="HR_HipY.obj"/>
+    <mesh name="HR_calf_mesh" file="HR_Knee.obj"/>
+
+    <mesh name="lidar_mesh" file="Helios_Lidar.obj"/>
+    <mesh name="camera_mesh" file="AC_Camera.obj"/>
+  </asset>
+
+  <worldbody>
+    <light
+        directional="true"
+        diffuse=".8 .8 .8"
+        specular="0.2 0.2 0.2"
+        pos="0 0 5.0"
+        dir="0 0 -1"
+        castshadow="false"/>
+
+    <body name="trunk" pos="0 0 0.15" quat="0 0 0 1">
+      <camera
+          name="track"
+          pos="0.846 -1.3 0.316"
+          xyaxes="0.866 0.500 0.000 -0.171 0.296 0.940"
+          mode="trackcom"/>
+      <camera
+          name="top"
+          pos="-1 0 1"
+          xyaxes="0 -1 0 0.7 0 0.7"
+          mode="trackcom"/>
+      <camera
+          name="side"
+          pos="0 -1 .3"
+          xyaxes="1 0 0 0 1 2"
+          mode="trackcom"/>
+      <camera
+          name="back"
+          pos="-1 0 .3"
+          xyaxes="0 -1 0 1 0 2"
+          mode="trackcom"/>
+      <site name="imu_sensor_site" pos="-0.006 0 0.013" quat="0 0 0 1"/>
+      <joint
+          name="floating_base"
+          type="free"
+          limited="false"
+          actuatorfrclimited="false"/>
+
+      <inertial
+          pos="-0.0069912 0.01165 -0.0071119"
+          mass="4.1"
+          diaginertia="0.014 0.058 0.063"/>
+      <geom
+          name="base_collision_main"
+          type="box"
+          pos="0 0.01165 0"
+          size="0.20 0.08 0.07"
+          contype="1"
+          conaffinity="1"
+          group="2"/>
+      <geom mesh="base_mesh" material="metal" class="visual"/>
+
+      <body name="FR_hip" pos="-0.15015 0.043877 0.009137">
+        <inertial
+            pos="0.03 0.05 0.0"
+            quat="0.707106783589 0.707106778784 0 0"
+            mass="0.39"
+            diaginertia="4.070e-4 4.070e-4 1.640e-4"/>
+        <joint
+            name="RF_HAA"
+            axis="1 0 0"
+            range="-0.436332 0.436332"
+            damping="0.05"
+            frictionloss="0.0"/>
+        <geom
+            type="cylinder"
+            pos="0.038 0.075 0"
+            euler="1.57079632 0 0"
+            size="0.029 0.05"
+            contype="0"
+            conaffinity="0"
+            group="2"/>
+        <geom
+            type="mesh"
+            mesh="FR_hip_mesh"
+            material="metal"
+            contype="0"
+            conaffinity="0"
+            group="1"/>
+
+        <body name="FR_thigh" pos="0.033575 0.0327 0">
+          <inertial
+              pos="0.0 0.050 -0.020"
+              quat="0.519098886833 0 0.854714189474 0"
+              mass="0.725"
+              diaginertia="1.414e-3 1.510e-3 2.054e-4"/>
+          <joint
+              name="RF_HFE"
+              axis="0 1 0"
+              range="-0.1745 3.316"
+              damping="0.10"
+              frictionloss="0.01"/>
+          <geom
+              type="box"
+              pos="0.06 0.075 -0.03"
+              euler="0 2.05 0"
+              size="0.025 0.015 0.075"
+              contype="0"
+              conaffinity="0"
+              group="2"/>
+          <geom type="mesh" mesh="FR_thigh_mesh" contype="0" conaffinity="0"/>
+
+          <body name="FR_calf" pos="0.10286 0.06915 -0.061805">
+            <inertial
+                pos="-0.020 0.0 0.0"
+                quat="0.703845315652 0 0.710353272418 0"
+                mass="0.106"
+                diaginertia="2.314e-4 2.314e-4 1.039e-5"/>
+            <joint
+                name="RF_KFE"
+                axis="0 1 0"
+                range="-1.745529 0.001"
+                damping="0.12"
+                frictionloss="0.05"/>
+            <geom
+                name="RF_KNEE_collision"
+                type="capsule"
+                pos="-0.04 0 0"
+                euler="0 1.58 0"
+                size="0.018 0.0605"
+                contype="1"
+                conaffinity="1"
+                group="2"/>
+            <geom
+                type="mesh"
+                mesh="FR_calf_mesh"
+                material="orange"
+                contype="0"
+                conaffinity="0"/>
+
+            <body name="RF_FOOT" pos="-0.135 0.005 0">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="1.936e-7 1.936e-7 1.936e-7"/>
+              <geom
+                  name="RF_FOOT_geom"
+                  type="sphere"
+                  size="0.022"
+                  contype="1"
+                  conaffinity="1"
+                  condim="3"
+                  group="2"/>
+              <site name="RF_FOOT" pos="0 0 0" type="sphere" size="0.022" group="5"/>
+              <geom class="foot_visual"/>
+            </body>
+          </body>
+      </body>
+        </body>
+
+      <body name="FL_hip" pos="-0.14915 -0.016123 0.009137">
+        <inertial
+            pos="0.03 -0.05 0.0"
+            quat="0.707106783589 0.707106778784 0 0"
+            mass="0.39"
+            diaginertia="4.070e-4 4.070e-4 1.640e-4"/>
+        <joint
+            name="LF_HAA"
+            axis="1 0 0"
+            range="-0.436332 0.436332"
+            damping="0.05"
+            frictionloss="0.0"/>
+        <geom
+            type="cylinder"
+            pos="0.038 -0.075 0"
+            euler="1.57079632 0 0"
+            size="0.029 0.05"
+            contype="0"
+            conaffinity="0"
+            group="2"/>
+        <geom
+            type="mesh"
+            mesh="FL_hip_mesh"
+            material="metal"
+            contype="0"
+            conaffinity="0"
+            group="1"/>
+
+        <body name="FL_thigh" pos="0.032575 -0.033 0">
+          <inertial
+              pos="0.0 -0.050 -0.020"
+              quat="0.519098886833 0 0.854714189474 0"
+              mass="0.725"
+              diaginertia="1.414e-3 1.510e-3 2.054e-4"/>
+          <joint
+              name="LF_HFE"
+              axis="0 -1 0"
+              range="-3.316 0.1745"
+              damping="0.10"
+              frictionloss="0.01"/>
+          <geom
+              type="box"
+              pos="0.06 -0.075 -0.03"
+              euler="0 2.05 0"
+              size="0.025 0.015 0.075"
+              contype="0"
+              conaffinity="0"
+              group="2"/>
+          <geom type="mesh" mesh="FL_thigh_mesh" contype="0" conaffinity="0"/>
+
+          <body name="FL_calf" pos="0.10303 -0.08105 -0.061521">
+            <inertial
+                pos="-0.020 0.0 0.0"
+                quat="0.703845315652 0 0.710353272418 0"
+                mass="0.106"
+                diaginertia="2.314e-4 2.314e-4 1.039e-5"/>
+            <joint
+                name="LF_KFE"
+                axis="0 -1 0"
+                range="-0.001 1.745529"
+                damping="0.12"
+                frictionloss="0.05"/>
+            <geom
+                name="LF_KNEE_collision"
+                type="capsule"
+                pos="-0.04 0 0"
+                euler="0 1.58 0"
+                size="0.018 0.0605"
+                contype="1"
+                conaffinity="1"
+                group="2"/>
+            <geom
+                type="mesh"
+                mesh="FL_calf_mesh"
+                material="orange"
+                contype="0"
+                conaffinity="0"/>
+
+            <body name="LF_FOOT" pos="-0.135 0.005 0">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="1.936e-7 1.936e-7 1.936e-7"/>
+              <geom
+                  name="LF_FOOT_geom"
+                  type="sphere"
+                  size="0.022"
+                  contype="1"
+                  conaffinity="1"
+                  condim="3"
+                  group="2"/>
+              <site name="LF_FOOT" pos="0 0 0" type="sphere" size="0.022" group="5"/>
+              <geom class="foot_visual"/>
+            </body>
+          </body>
+      </body>
+        </body>
+
+      <body name="HR_hip" pos="0.14685 0.043877 0.009137">
+        <inertial
+            pos="-0.03 0.05 0.0"
+            quat="0.707106783589 0.707106778784 0 0"
+            mass="0.39"
+            diaginertia="4.070e-4 4.070e-4 1.640e-4"/>
+        <joint
+            name="RH_HAA"
+            axis="-1 0 0"
+            range="-0.436332 0.436332"
+            damping="0.05"
+            frictionloss="0.0"/>
+        <geom
+            type="cylinder"
+            pos="-0.038 0.075 0"
+            euler="1.57079632 0 0"
+            size="0.029 0.05"
+            contype="0"
+            conaffinity="0"
+            group="2"/>
+        <geom
+            type="mesh"
+            mesh="HR_hip_mesh"
+            material="metal"
+            contype="0"
+            conaffinity="0"
+            group="1"/>
+
+        <body name="HR_thigh" pos="-0.032575 0.0329 0">
+          <inertial
+              pos="0.0 0.050 -0.020"
+              quat="0.519098886833 0 0.854714189474 0"
+              mass="0.725"
+              diaginertia="1.414e-3 1.510e-3 2.054e-4"/>
+          <joint
+              name="RH_HFE"
+              axis="0 1 0"
+              range="-0.1745 3.316"
+              damping="0.10"
+              frictionloss="0.01"/>
+          <geom
+              type="box"
+              pos="0.06 0.075 -0.03"
+              euler="0 2.05 0"
+              size="0.025 0.015 0.075"
+              contype="0"
+              conaffinity="0"
+              group="2"/>
+          <geom type="mesh" mesh="HR_thigh_mesh" contype="0" conaffinity="0"/>
+
+          <body name="HR_calf" pos="0.10286 0.06895 -0.061805">
+            <inertial
+                pos="-0.020 0.0 0.0"
+                quat="0.703845315652 0 0.710353272418 0"
+                mass="0.106"
+                diaginertia="2.314e-4 2.314e-4 1.039e-5"/>
+            <joint
+                name="RH_KFE"
+                axis="0 1 0"
+                range="-1.745529 0.001"
+                damping="0.12"
+                frictionloss="0.05"/>
+            <geom
+                name="RH_KNEE_collision"
+                type="capsule"
+                pos="-0.04 0 0"
+                euler="0 1.58 0"
+                size="0.018 0.0605"
+                contype="1"
+                conaffinity="1"
+                group="2"/>
+            <geom
+                type="mesh"
+                mesh="HR_calf_mesh"
+                material="orange"
+                contype="0"
+                conaffinity="0"/>
+
+            <body name="RH_FOOT" pos="-0.135 0.005 0">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="1.936e-7 1.936e-7 1.936e-7"/>
+              <geom
+                  name="RH_FOOT_geom"
+                  type="sphere"
+                  size="0.022"
+                  contype="1"
+                  conaffinity="1"
+                  condim="3"
+                  group="2"/>
+              <site name="RH_FOOT" pos="0 0 0" type="sphere" size="0.022" group="5"/>
+              <geom class="foot_visual"/>
+            </body>
+          </body>
+      </body>
+        </body>
+
+      <body name="HL_hip" pos="0.14785 -0.016123 0.009137">
+        <inertial
+            pos="-0.03 -0.05 0.0"
+            quat="0.707106783589 0.707106778784 0 0"
+            mass="0.39"
+            diaginertia="4.070e-4 4.070e-4 1.640e-4"/>
+        <joint
+            name="LH_HAA"
+            axis="-1 0 0"
+            range="-0.436332 0.436332"
+            damping="0.05"
+            frictionloss="0.0"/>
+        <geom
+            type="cylinder"
+            pos="-0.038 -0.075 0"
+            euler="1.57079632 0 0"
+            size="0.029 0.05"
+            contype="0"
+            conaffinity="0"
+            group="2"/>
+        <geom
+            type="mesh"
+            mesh="HL_hip_mesh"
+            material="metal"
+            contype="0"
+            conaffinity="0"
+            group="1"/>
+
+        <body name="HL_thigh" pos="-0.033575 -0.0329 0">
+          <inertial
+              pos="0.0 -0.050 -0.020"
+              quat="0.519098886833 0 0.854714189474 0"
+              mass="0.725"
+              diaginertia="1.414e-3 1.510e-3 2.054e-4"/>
+          <joint
+              name="LH_HFE"
+              axis="0 -1 0"
+              range="-3.316 0.1745"
+              damping="0.10"
+              frictionloss="0.01"/>
+          <geom
+              type="box"
+              pos="0.06 -0.075 -0.03"
+              euler="0 2.05 0"
+              size="0.025 0.015 0.075"
+              contype="0"
+              conaffinity="0"
+              group="2"/>
+          <geom type="mesh" mesh="HL_thigh_mesh" contype="0" conaffinity="0"/>
+
+          <body name="HL_calf" pos="0.10303 -0.08115 -0.061521">
+            <inertial
+                pos="-0.020 0.0 0.0"
+                quat="0.703845315652 0 0.710353272418 0"
+                mass="0.106"
+                diaginertia="2.314e-4 2.314e-4 1.039e-5"/>
+            <joint
+                name="LH_KFE"
+                axis="0 -1 0"
+                range="-0.001 1.745529"
+                damping="0.12"
+                frictionloss="0.05"/>
+            <geom
+                name="LH_KNEE_collision"
+                type="capsule"
+                pos="-0.04 0 0"
+                euler="0 1.58 0"
+                size="0.018 0.0605"
+                contype="1"
+                conaffinity="1"
+                group="2"/>
+            <geom
+                type="mesh"
+                mesh="HL_calf_mesh"
+                material="orange"
+                contype="0"
+                conaffinity="0"/>
+
+            <body name="LH_FOOT" pos="-0.135 0.005 0">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="1.936e-7 1.936e-7 1.936e-7"/>
+              <geom
+                  name="LH_FOOT_geom"
+                  type="sphere"
+                  size="0.022"
+                  contype="1"
+                  conaffinity="1"
+                  condim="3"
+                  group="2"/>
+              <site name="LH_FOOT" pos="0 0 0" type="sphere" size="0.022" group="5"/>
+              <geom class="foot_visual"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <sensor>
+    <framequat name="imu_quat" objtype="site" objname="imu_sensor_site"/>
+    <gyro name="imu_angvel" site="imu_sensor_site"/>
+    <velocimeter name="local_linvel" site="imu_sensor_site"/>
+    <accelerometer name="imu_linacc" site="imu_sensor_site"/>
+    <framezaxis name="upvector" objtype="site" objname="imu_sensor_site"/>
+
+    <jointpos joint="LF_HAA"/>
+    <jointpos joint="LF_HFE"/>
+    <jointpos joint="LF_KFE"/>
+
+    <jointpos joint="LH_HAA"/>
+    <jointpos joint="LH_HFE"/>
+    <jointpos joint="LH_KFE"/>
+
+    <jointpos joint="RF_HAA"/>
+    <jointpos joint="RF_HFE"/>
+    <jointpos joint="RF_KFE"/>
+
+    <jointpos joint="RH_HAA"/>
+    <jointpos joint="RH_HFE"/>
+    <jointpos joint="RH_KFE"/>
+
+    <jointvel joint="LF_HAA"/>
+    <jointvel joint="LF_HFE"/>
+    <jointvel joint="LF_KFE"/>
+
+    <jointvel joint="LH_HAA"/>
+    <jointvel joint="LH_HFE"/>
+    <jointvel joint="LH_KFE"/>
+
+    <jointvel joint="RF_HAA"/>
+    <jointvel joint="RF_HFE"/>
+    <jointvel joint="RF_KFE"/>
+
+    <jointvel joint="RH_HAA"/>
+    <jointvel joint="RH_HFE"/>
+    <jointvel joint="RH_KFE"/>
+
+    <framequat name="base_quat" objtype="site" objname="imu_sensor_site"/>
+    <framepos name="base_pose" objtype="site" objname="imu_sensor_site"/>
+    <frameangvel name="base_angvel" objtype="site" objname="imu_sensor_site"/>
+    <framelinvel name="base_linvel" objtype="site" objname="imu_sensor_site"/>
+
+    <framelinvel name="RF_FOOT_global_linvel" objtype="site" objname="RF_FOOT"/>
+    <framelinvel name="LF_FOOT_global_linvel" objtype="site" objname="LF_FOOT"/>
+    <framelinvel name="RH_FOOT_global_linvel" objtype="site" objname="RH_FOOT"/>
+    <framelinvel name="LH_FOOT_global_linvel" objtype="site" objname="LH_FOOT"/>
+
+    <framepos
+        name="RF_FOOT_pos"
+        objtype="site"
+        objname="RF_FOOT"
+        reftype="site"
+        refname="imu_sensor_site"/>
+    <framepos
+        name="LF_FOOT_pos"
+        objtype="site"
+        objname="LF_FOOT"
+        reftype="site"
+        refname="imu_sensor_site"/>
+    <framepos
+        name="RH_FOOT_pos"
+        objtype="site"
+        objname="RH_FOOT"
+        reftype="site"
+        refname="imu_sensor_site"/>
+    <framepos
+        name="LH_FOOT_pos"
+        objtype="site"
+        objname="LH_FOOT"
+        reftype="site"
+        refname="imu_sensor_site"/>
+
+    <contact
+        name="RF_FOOT_geom_floor_found"
+        geom1="RF_FOOT_geom"
+        reduce="mindist"
+        num="1"
+        data="found"/>
+    <contact
+        name="LF_FOOT_geom_floor_found"
+        geom1="LF_FOOT_geom"
+        reduce="mindist"
+        num="1"
+        data="found"/>
+    <contact
+        name="RH_FOOT_geom_floor_found"
+        geom1="RH_FOOT_geom"
+        reduce="mindist"
+        num="1"
+        data="found"/>
+    <contact
+        name="LH_FOOT_geom_floor_found"
+        geom1="LH_FOOT_geom"
+        reduce="mindist"
+        num="1"
+        data="found"/>
+  </sensor>
+
+  <actuator>
+    <position name="RF_HAA" joint="RF_HAA" forcerange="-12 12" forcelimited="true"/>
+    <position name="RF_HFE" joint="RF_HFE" forcerange="-18 18" forcelimited="true"/>
+    <position name="RF_KFE" joint="RF_KFE" forcerange="-18 18" forcelimited="true"/>
+
+    <position name="LF_HAA" joint="LF_HAA" forcerange="-12 12" forcelimited="true"/>
+    <position name="LF_HFE" joint="LF_HFE" forcerange="-18 18" forcelimited="true"/>
+    <position name="LF_KFE" joint="LF_KFE" forcerange="-18 18" forcelimited="true"/>
+
+    <position name="RH_HAA" joint="RH_HAA" forcerange="-12 12" forcelimited="true"/>
+    <position name="RH_HFE" joint="RH_HFE" forcerange="-18 18" forcelimited="true"/>
+    <position name="RH_KFE" joint="RH_KFE" forcerange="-18 18" forcelimited="true"/>
+
+    <position name="LH_HAA" joint="LH_HAA" forcerange="-12 12" forcelimited="true"/>
+    <position name="LH_HFE" joint="LH_HFE" forcerange="-18 18" forcelimited="true"/>
+    <position name="LH_KFE" joint="LH_KFE" forcerange="-18 18" forcelimited="true"/>
+  </actuator>
+
+  <keyframe>
+    <key
+        name="home"
+        qpos="0 0 0.21 1 0 0 0  0 0.4 -1.35  0 -0.4 1.35  0 0.4 -1.35  0 -0.4 1.35"
+        ctrl="0 0.4 -1.35  0 -0.4 1.35  0 0.4 -1.35  0 -0.4 1.35"/>
+  </keyframe>
+</mujoco>

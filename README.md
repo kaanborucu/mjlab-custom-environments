@@ -47,10 +47,17 @@ to find, test, and modify:
 | --- | --- | --- |
 | Bird | Flapping-flight and velocity-control experiments | Migrated |
 | Crawler | Crawling locomotion on flat and rough terrain | Migrated |
-| Quad Mini | Joystick velocity control on flat terrain | Planned after bird and crawler |
+| Quad Mini | Joystick velocity control on flat terrain | Migrated |
 
 The environment-specific organization is documented in the
 [project structure guide](https://mujocolab.github.io/mjlab/main/source/project_structure.html).
+
+Run the Quad Mini task with:
+
+```bash
+uv run train Mjlab-QuadMiniTuned-Joystick-FlatTerrain
+uv run play Mjlab-QuadMiniTuned-Joystick-FlatTerrain
+```
 
 ## Training Examples
 
