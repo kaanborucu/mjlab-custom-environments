@@ -12,6 +12,9 @@ Added
   environment layout for the new ``mjlab16`` workspace.
 - Added the migrated Bird and three-DoF Crawler environments, including their
   robot assets, task configurations, domain randomization, and focused tests.
+- Added the Quad Mini Tuned flat-terrain joystick environment, including its
+  12-joint asset, source-matched observations and rewards, domain randomization,
+  and focused integration tests.
 
 Version 1.6.0 (August 8, 2026)
 ------------------------------

@@ -496,11 +496,13 @@ task IDs are <code class="docutils literal notranslate"><span class="pre">Mjlab-
 <li><p><strong>Crawler</strong>: crawling locomotion on flat and rough terrain. The migrated
 task IDs use the <code class="docutils literal notranslate"><span class="pre">Mjlab-Crawl-*</span></code> prefix and include flat, robust, and
 teacher/student variants.</p></li>
-<li><p><strong>Quad Mini</strong>: joystick velocity control on flat terrain. This is planned
-after Bird and Crawler validation.</p></li>
+<li><p><strong>Quad Mini</strong>: joystick velocity control on flat terrain. The task ID is
+<code class="docutils literal notranslate"><span class="pre">Mjlab-QuadMiniTuned-Joystick-FlatTerrain</span></code>.</p></li>
 </ul>
-<p>Bird and Crawler are now part of the main source tree. Quad Mini will be added
-after both migrations are working and validated.</p>
+<p>Bird, Crawler, and Quad Mini are ordinary environments in the main source
+tree. Quad Mini keeps its robot asset in
+<code class="docutils literal notranslate"><span class="pre">src/mjlab/asset_zoo/robots/quad_mini_tuned/</span></code> and its task configuration and
+MDP terms in <code class="docutils literal notranslate"><span class="pre">src/mjlab/tasks/quad_mini_tuned/</span></code>.</p>
 </section>
 <section id="where-files-belong">
 <h2>Where files belong<a class="headerlink" href="#where-files-belong" title="Link to this heading">#</a></h2>

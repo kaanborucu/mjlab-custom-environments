@@ -19,11 +19,13 @@ The project has three first-class environments:
 * **Crawler**: crawling locomotion on flat and rough terrain. The migrated
   task IDs use the ``Mjlab-Crawl-*`` prefix and include flat, robust, and
   teacher/student variants.
-* **Quad Mini**: joystick velocity control on flat terrain. This is planned
-  after Bird and Crawler validation.
+* **Quad Mini**: joystick velocity control on flat terrain. The task ID is
+  ``Mjlab-QuadMiniTuned-Joystick-FlatTerrain``.
 
-Bird and Crawler are now part of the main source tree. Quad Mini will be added
-after both migrations are working and validated.
+Bird, Crawler, and Quad Mini are ordinary environments in the main source
+tree. Quad Mini keeps its robot asset in
+``src/mjlab/asset_zoo/robots/quad_mini_tuned/`` and its task configuration and
+MDP terms in ``src/mjlab/tasks/quad_mini_tuned/``.
 
 Where files belong
 ------------------
