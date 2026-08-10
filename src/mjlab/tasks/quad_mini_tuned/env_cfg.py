@@ -433,7 +433,7 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       ),
     },
     sim=SimulationCfg(
-      nconmax=8 * 8192,
+      nconmax=128,
       njmax=128,
       contact_sensor_maxmatch=64,
       mujoco=MujocoCfg(

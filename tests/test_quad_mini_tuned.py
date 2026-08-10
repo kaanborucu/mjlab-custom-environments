@@ -39,6 +39,11 @@ def test_quad_task_is_registered() -> None:
   assert TASK_ID in list_tasks()
 
 
+def test_quad_simulation_contact_limit_is_per_world() -> None:
+  cfg = load_env_cfg(TASK_ID)
+  assert cfg.sim.nconmax == 128
+
+
 def _tensor_observation(observations: VecEnvObs, name: str) -> torch.Tensor:
   value = observations[name]
   assert isinstance(value, torch.Tensor)
