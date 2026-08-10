@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<mujoco model="bird_5dof_forward_adjusted">
+<mujoco model="bird_5dof">
   <!--
     Five-DoF bird-inspired flapping-wing robot for mjlab / MuJoCo Warp.
 

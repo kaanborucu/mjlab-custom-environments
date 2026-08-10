@@ -62,11 +62,8 @@ The main task for each environment is:
 | Crawler | `Mjlab-Crawl-Flat-ThreeDofCrawler` |
 | Quad Mini | `Mjlab-QuadMiniTuned-Joystick-FlatTerrain` |
 
-Bird also includes `Mjlab-Velocity-Bird-Forward-3D`,
-`Mjlab-Velocity-Bird-5DoF-Original`, and
-`Mjlab-Velocity-Bird-5DoF-Original-NewXML`. Crawler also includes robust,
-rough-terrain, teacher, and student variants; see
-`src/mjlab/tasks/crawler/__init__.py` for their task IDs.
+Crawler also includes robust, rough-terrain, teacher, and student variants;
+see `src/mjlab/tasks/crawler/__init__.py` for their task IDs.
 
 ### Check that the environments work
 
@@ -75,9 +72,6 @@ Run the focused tests for all three custom environments:
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest -q \
   tests/test_bird_velocity_task.py \
-  tests/test_bird_forward_velocity_task.py \
-  tests/test_bird_original_velocity_task.py \
-  tests/test_bird_original_new_xml_task.py \
   tests/test_crawler_environment.py \
   tests/test_quad_mini_tuned.py
 ```
@@ -105,6 +99,28 @@ Training requires an NVIDIA GPU. Start a run for each main environment with:
 uv run train Mjlab-Velocity-Bird-5DoF --env.scene.num-envs 4096
 uv run train Mjlab-Crawl-Flat-ThreeDofCrawler --env.scene.num-envs 4096
 uv run train Mjlab-QuadMiniTuned-Joystick-FlatTerrain --env.scene.num-envs 4096
+```
+
+For Crawler teacher/student training, use the rough-terrain or flat-terrain
+task pair:
+
+```bash
+# Rough-terrain teacher and student.
+uv run train Mjlab-Crawl-Rough-ThreeDofCrawler-Teacher --env.scene.num-envs 4096
+uv run train Mjlab-Crawl-Rough-ThreeDofCrawler-Student --env.scene.num-envs 4096
+
+# Flat-terrain teacher and student.
+uv run train Mjlab-Crawl-Flat-ThreeDofCrawler-Teacher --env.scene.num-envs 4096
+uv run train Mjlab-Crawl-Flat-ThreeDofCrawler-Student --env.scene.num-envs 4096
+```
+
+Play the newest local teacher or student checkpoint automatically with:
+
+```bash
+uv run play Mjlab-Crawl-Rough-ThreeDofCrawler-Teacher
+uv run play Mjlab-Crawl-Rough-ThreeDofCrawler-Student
+uv run play Mjlab-Crawl-Flat-ThreeDofCrawler-Teacher
+uv run play Mjlab-Crawl-Flat-ThreeDofCrawler-Student
 ```
 
 To train a variant, replace the task ID with one from the task registration

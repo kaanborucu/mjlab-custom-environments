@@ -4,12 +4,6 @@ from mjlab.asset_zoo.robots.bird_5dof.bird_constants import (
 from mjlab.asset_zoo.robots.bird_5dof.bird_constants import (
   get_bird_5dof_robot_cfg as get_bird_5dof_robot_cfg,
 )
-from mjlab.asset_zoo.robots.bird_5dof_original.bird_constants import (
-  BIRD_5DOF_ORIGINAL_ACTION_SCALE as BIRD_5DOF_ORIGINAL_ACTION_SCALE,
-)
-from mjlab.asset_zoo.robots.bird_5dof_original.bird_constants import (
-  get_bird_5dof_original_robot_cfg as get_bird_5dof_original_robot_cfg,
-)
 from mjlab.asset_zoo.robots.i2rt_yam.yam_constants import (
   YAM_ACTION_SCALE as YAM_ACTION_SCALE,
 )
