@@ -108,7 +108,8 @@ uv run train Mjlab-QuadMiniTuned-Joystick-FlatTerrain --env.scene.num-envs 4096
 ```
 
 To train a variant, replace the task ID with one from the task registration
-files. To play a trained policy, pass its checkpoint path, for example:
+files. After training, `play` automatically loads the newest local checkpoint
+for that task. You can also select a checkpoint explicitly:
 
 ```bash
 uv run play Mjlab-QuadMiniTuned-Joystick-FlatTerrain \

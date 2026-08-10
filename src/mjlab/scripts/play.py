@@ -16,7 +16,7 @@ from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.scripts._cli import maybe_print_top_level_help
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
-from mjlab.utils.os import get_wandb_checkpoint_path
+from mjlab.utils.os import get_checkpoint_path, get_wandb_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
@@ -28,6 +28,22 @@ def _parse_wandb_dt(value: str | datetime) -> datetime:
   if isinstance(value, str):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
   return value
+
+
+def _get_latest_local_checkpoint(log_root_path: Path) -> Path:
+  """Find the newest local checkpoint for an experiment."""
+  try:
+    return get_checkpoint_path(
+      log_root_path,
+      run_dir=r".*",
+      checkpoint=r"^model_\d+\.pt$",
+    )
+  except ValueError as exc:
+    raise ValueError(
+      f"No local checkpoint found under {log_root_path}. Train this task first, "
+      "or provide `--checkpoint-file /path/to/model.pt` or "
+      "`--wandb-run-path entity/project/run_id`."
+    ) from exc
 
 
 @dataclass(frozen=True)
@@ -140,19 +156,22 @@ def run_play(task_id: str, cfg: PlayConfig):
       print(f"[INFO]: Loading checkpoint: {resume_path.name}")
     else:
       if cfg.wandb_run_path is None:
-        raise ValueError(
-          "`wandb_run_path` is required when `checkpoint_file` is not provided."
+        resume_path = _get_latest_local_checkpoint(log_root_path)
+        print(
+          f"[INFO]: Loading latest local checkpoint: {resume_path.name} "
+          f"(run: {resume_path.parent.name})"
         )
-      resume_path, was_cached = get_wandb_checkpoint_path(
-        log_root_path, Path(cfg.wandb_run_path), cfg.wandb_checkpoint_name
-      )
-      # Extract run_id and checkpoint name from path for display.
-      run_id = resume_path.parent.name
-      checkpoint_name = resume_path.name
-      cached_str = "cached" if was_cached else "downloaded"
-      print(
-        f"[INFO]: Loading checkpoint: {checkpoint_name} (run: {run_id}, {cached_str})"
-      )
+      else:
+        resume_path, was_cached = get_wandb_checkpoint_path(
+          log_root_path, Path(cfg.wandb_run_path), cfg.wandb_checkpoint_name
+        )
+        # Extract run_id and checkpoint name from path for display.
+        run_id = resume_path.parent.name
+        checkpoint_name = resume_path.name
+        cached_str = "cached" if was_cached else "downloaded"
+        print(
+          f"[INFO]: Loading checkpoint: {checkpoint_name} (run: {run_id}, {cached_str})"
+        )
     log_dir = resume_path.parent
 
   if cfg.num_envs is not None:

@@ -17,6 +17,8 @@ Added
   and focused integration tests.
 - Added README instructions for checking, training, and pushing the custom
   Bird, Crawler, and Quad Mini environments.
+- Added automatic local-checkpoint discovery to ``play`` when no checkpoint or
+  W&B run path is provided.
 
 Version 1.6.0 (August 8, 2026)
 ------------------------------
