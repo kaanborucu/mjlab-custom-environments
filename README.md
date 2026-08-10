@@ -52,11 +52,80 @@ to find, test, and modify:
 The environment-specific organization is documented in the
 [project structure guide](https://mujocolab.github.io/mjlab/main/source/project_structure.html).
 
-Run the Quad Mini task with:
+### Task IDs
+
+The main task for each environment is:
+
+| Environment | Task ID |
+| --- | --- |
+| Bird | `Mjlab-Velocity-Bird-5DoF` |
+| Crawler | `Mjlab-Crawl-Flat-ThreeDofCrawler` |
+| Quad Mini | `Mjlab-QuadMiniTuned-Joystick-FlatTerrain` |
+
+Bird also includes `Mjlab-Velocity-Bird-Forward-3D`,
+`Mjlab-Velocity-Bird-5DoF-Original`, and
+`Mjlab-Velocity-Bird-5DoF-Original-NewXML`. Crawler also includes robust,
+rough-terrain, teacher, and student variants; see
+`src/mjlab/tasks/crawler/__init__.py` for their task IDs.
+
+### Check that the environments work
+
+Run the focused tests for all three custom environments:
 
 ```bash
-uv run train Mjlab-QuadMiniTuned-Joystick-FlatTerrain
-uv run play Mjlab-QuadMiniTuned-Joystick-FlatTerrain
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest -q \
+  tests/test_bird_velocity_task.py \
+  tests/test_bird_forward_velocity_task.py \
+  tests/test_bird_original_velocity_task.py \
+  tests/test_bird_original_new_xml_task.py \
+  tests/test_crawler_environment.py \
+  tests/test_quad_mini_tuned.py
+```
+
+Run the full formatting, lint, and type checks:
+
+```bash
+make check
+```
+
+To open each environment in the viewer without a trained checkpoint, use the
+zero-action agent. Stop the viewer with `Ctrl+C` when you are finished:
+
+```bash
+uv run play Mjlab-Velocity-Bird-5DoF --agent zero
+uv run play Mjlab-Crawl-Flat-ThreeDofCrawler --agent zero
+uv run play Mjlab-QuadMiniTuned-Joystick-FlatTerrain --agent zero
+```
+
+### Train the environments
+
+Training requires an NVIDIA GPU. Start a run for each main environment with:
+
+```bash
+uv run train Mjlab-Velocity-Bird-5DoF --env.scene.num-envs 4096
+uv run train Mjlab-Crawl-Flat-ThreeDofCrawler --env.scene.num-envs 4096
+uv run train Mjlab-QuadMiniTuned-Joystick-FlatTerrain --env.scene.num-envs 4096
+```
+
+To train a variant, replace the task ID with one from the task registration
+files. To play a trained policy, pass its checkpoint path, for example:
+
+```bash
+uv run play Mjlab-QuadMiniTuned-Joystick-FlatTerrain \
+  --checkpoint-file path/to/model_1000.pt
+```
+
+### Push changes to GitHub
+
+This workspace is connected to
+`git@github.com:kaanborucu/mjlab-custom-environments.git`. After making and
+checking changes, push them with:
+
+```bash
+git status
+git add .
+git commit -m "Describe your change"
+git push origin main
 ```
 
 ## Training Examples
