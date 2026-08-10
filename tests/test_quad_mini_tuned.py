@@ -13,7 +13,7 @@ from mjlab.entity import Entity
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.envs.types import VecEnvObs
 from mjlab.tasks.quad_mini_tuned import TASK_ID
-from mjlab.tasks.registry import list_tasks, load_env_cfg
+from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
 
 
 @pytest.fixture(scope="module")
@@ -42,6 +42,10 @@ def test_quad_task_is_registered() -> None:
 def test_quad_simulation_contact_limit_is_per_world() -> None:
   cfg = load_env_cfg(TASK_ID)
   assert cfg.sim.nconmax == 128
+
+
+def test_quad_policy_clips_actions() -> None:
+  assert load_rl_cfg(TASK_ID).clip_actions == 1.0
 
 
 def _tensor_observation(observations: VecEnvObs, name: str) -> torch.Tensor:

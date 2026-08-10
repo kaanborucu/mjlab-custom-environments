@@ -33,6 +33,8 @@ Fixed
 
 - Reduced the Quad Mini per-world contact allocation so training with thousands
   of parallel environments no longer exhausts GPU memory during initialization.
+- Clipped Quad Mini policy actions to the normalized ``[-1, 1]`` range before
+  applying joint-position targets, matching the Bird and Crawler runners.
 
 Version 1.6.0 (August 8, 2026)
 ------------------------------
