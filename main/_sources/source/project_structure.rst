@@ -12,10 +12,7 @@ Environment roadmap
 The project has three first-class environments:
 
 * **Bird**: flapping-flight and velocity-control experiments. The migrated
-  task IDs are ``Mjlab-Velocity-Bird-5DoF``,
-  ``Mjlab-Velocity-Bird-Forward-3D``,
-  ``Mjlab-Velocity-Bird-5DoF-Original``, and
-  ``Mjlab-Velocity-Bird-5DoF-Original-NewXML``.
+  task ID is ``Mjlab-Velocity-Bird-5DoF``.
 * **Crawler**: crawling locomotion on flat and rough terrain. The migrated
   task IDs use the ``Mjlab-Crawl-*`` prefix and include flat, robust, and
   teacher/student variants.

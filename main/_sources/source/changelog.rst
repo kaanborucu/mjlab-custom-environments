@@ -20,6 +20,14 @@ Added
 - Added automatic local-checkpoint discovery to ``play`` when no checkpoint or
   W&B run path is provided.
 
+Changed
+^^^^^^^
+
+- Simplified the Bird environment layout to keep only the
+  ``Mjlab-Velocity-Bird-5DoF`` task and its shared robot asset.
+- Added README commands for training and playing the Crawler rough-terrain and
+  flat-terrain teacher/student pairs.
+
 Version 1.6.0 (August 8, 2026)
 ------------------------------
 
