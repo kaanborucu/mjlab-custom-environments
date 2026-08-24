@@ -62,6 +62,9 @@ Added
 Changed
 ^^^^^^^
 
+- Updated the project README with the current TONY5 task matrix, environment
+  parameters, editable reward locations, training/resume commands, checkpoint
+  behavior, wind/gust controls, disturbances, and keyboard/gamepad play input.
 - Fixed TONY5 Omni V3 keyboard and gamepad horizontal commands to use fixed
   world-frame X/Y axes, matching the V3 policy observations and rewards; V0
   body-frame manual control is unchanged.
