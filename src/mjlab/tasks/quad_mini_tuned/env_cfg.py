@@ -8,6 +8,7 @@ from mjlab.asset_zoo.robots.quad_mini_tuned.quad_constants import (
   FEET_GEOMS,
   FEET_SITES,
   JOINT_NAMES,
+  QUAD_MINI_TUNED_ACTION_SCALE,
   get_quad_mini_tuned_robot_cfg,
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
@@ -44,28 +45,28 @@ FOOT_GEOM_CFG = SceneEntityCfg("robot", geom_names=FEET_GEOMS, preserve_order=Tr
 
 REWARD_WEIGHTS = {
   "tracking_lin_vel": 5.0,
-  "tracking_ang_vel": 2.5,
+  "tracking_ang_vel": 2.50,
   "lin_vel_z": -1.0,
   "ang_vel_xy": -0.15,
   "orientation": -5.0,
-  "base_height": -1.0e-8,
+  "base_height": -0.01 * 0,
   "dof_pos_limits": -1.0,
   "pose": 0.5,
   "termination": -0.001,
-  "stand_still": -0.001,
-  "torques": -0.0001,
+  "stand_still": -0.001 * 0,
+  "torques": -1.0e-7,
   "action_rate": -0.01,
-  "energy": -0.001,
+  "energy": -1.0e-7,
   "dof_acc": -1.0e-7,
-  "dof_vel": -0.00002,
-  "feet_clearance": -2.0,
-  "feet_height": -0.1,
-  "feet_slip": -0.1,
-  "impact_feet_vel": -0.001,
-  "feet_air_time": 0.20,
-  "diagonal_trot": 0.00001,
-  "all_feet_sync": -0.09,
-  "three_feet_support": -0.00001,
+  "dof_vel": -1.0e-7,
+  "feet_clearance": -2.00 * 0,
+  "feet_height": -0.1 * 0,
+  "feet_slip": -0.1 * 0,
+  "impact_feet_vel": -0.000000001 * 0,
+  "feet_air_time": 0.20 * 0,
+  "diagonal_trot": 0.25 * 0,
+  "all_feet_sync": -0.05 * 0,
+  "three_feet_support": -0.00001 * 0,
 }
 
 
@@ -155,7 +156,7 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       mode="reset",
       func=envs_mdp.reset_root_state_uniform,
       params={
-        "pose_range": {"z": (-0.005, 0.005)},
+        "pose_range": {},
         "velocity_range": {"z": (-0.05, 0.05)},
         "asset_cfg": ROBOT_CFG,
       },
@@ -228,8 +229,12 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     ),
     "default_joint_pose": EventTermCfg(
       mode="startup",
-      func=mdp.quad_default_joint_pose,
-      params={"asset_cfg": ROBOT_CFG, "ranges": (-0.03, 0.03)},
+      func=dr.joint_default_pos,
+      params={
+        "asset_cfg": ROBOT_CFG,
+        "operation": "add",
+        "ranges": (-0.03, 0.03),
+      },
     ),
     "pd_gains": EventTermCfg(
       mode="startup",
@@ -293,9 +298,9 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       params={"target_height": 0.25},
     ),
     "dof_pos_limits": RewardTermCfg(
-      func=envs_mdp.joint_pos_limits,
+      func=mdp.quad_joint_pos_limits,
       weight=REWARD_WEIGHTS["dof_pos_limits"],
-      params={"asset_cfg": ROBOT_CFG},
+      params={"asset_cfg": ROBOT_CFG, "soft_limit_factor": 0.95},
     ),
     "pose": RewardTermCfg(func=mdp.quad_pose, weight=REWARD_WEIGHTS["pose"]),
     "termination": RewardTermCfg(
@@ -326,7 +331,6 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       weight=REWARD_WEIGHTS["feet_clearance"],
       params={
         "target_height": 0.25,
-        "command_name": "twist",
         "asset_cfg": FEET_CFG,
       },
     ),
@@ -403,8 +407,9 @@ def quad_mini_tuned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       "joint_pos": JointPositionActionCfg(
         entity_name="robot",
         actuator_names=JOINT_NAMES,
-        scale=0.6,
+        scale=QUAD_MINI_TUNED_ACTION_SCALE,
         use_default_offset=True,
+        clip_to_joint_limits=True,
       )
     },
     commands={

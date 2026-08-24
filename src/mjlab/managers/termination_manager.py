@@ -22,6 +22,9 @@ class TerminationTermCfg(ManagerTermBaseCfg):
   time_out: bool = False
   """Whether the term contributes towards episodic timeouts."""
 
+  log: bool = True
+  """Whether to include this term in episodic termination diagnostics."""
+
 
 class TerminationManager(ManagerBase):
   """Manages termination conditions for the environment.
@@ -91,10 +94,11 @@ class TerminationManager(ManagerBase):
     if env_ids is None:
       env_ids = slice(None)
     extras = {}
-    for key in self._term_dones.keys():
-      extras["Episode_Termination/" + key] = torch.count_nonzero(
-        self._term_dones[key][env_ids]
-      ).item()
+    for key, term_cfg in zip(self._term_dones, self._term_cfgs, strict=False):
+      if term_cfg.log:
+        extras["Episode_Termination/" + key] = torch.count_nonzero(
+          self._term_dones[key][env_ids]
+        ).item()
     for term_cfg in self._class_term_cfgs:
       term_cfg.func.reset(env_ids=env_ids)
     return extras

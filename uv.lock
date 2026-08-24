@@ -1654,6 +1654,7 @@ name = "mjlab"
 version = "1.6.0"
 source = { editable = "." }
 dependencies = [
+    { name = "glfw" },
     { name = "imageio-ffmpeg" },
     { name = "mediapy" },
     { name = "mjviser" },
@@ -1723,6 +1724,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "glfw", specifier = ">=2.10.0" },
     { name = "imageio-ffmpeg" },
     { name = "mediapy", specifier = ">=1.2.7" },
     { name = "mjviser", specifier = ">=0.0.14" },

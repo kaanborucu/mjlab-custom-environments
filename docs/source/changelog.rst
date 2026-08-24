@@ -19,18 +19,215 @@ Added
   Bird, Crawler, and Quad Mini environments.
 - Added automatic local-checkpoint discovery to ``play`` when no checkpoint or
   W&B run path is provided.
+- Added Quad Mini clean privileged teacher and five-frame student tasks with
+  local teacher-checkpoint loading for distillation.
+- Added automatic selection of the latest local Quad Mini teacher checkpoint
+  when starting student distillation.
+- Added a staged domain-randomization curriculum for the Quad Mini teacher that
+  starts from nominal dynamics and reaches the existing full ranges after 5,000
+  PPO iterations.
+- Added the TONY5 V0 individual-rotor-speed position+yaw quadrotor task with
+  physical rotor bodies, voltage-driven DC motor actuators with a measured-speed
+  PID loop, and per-substep thrust and aerodynamic rotor-drag physics.
+- Added the TONY5 V0 body-velocity tracking task with body-frame linear velocity
+  and yaw-rate commands, velocity rewards, and command/actual velocity arrows.
+- Added five-frame flattened actor and critic observation history to the TONY5
+  velocity task.
+- Added the ``Mjlab-Tony5-Velocity-Aero-v1`` task with MuJoCo ellipsoid body
+  aerodynamics, vectorized local rotor airflow, and estimated rotor H-force.
+- Added optional TONY5 Aero V1 keyboard velocity teleoperation in ``play``,
+  including ``+``/``-`` horizontal-speed ceiling controls and equivalent Viser
+  buttons.
+- Added native-viewer analog gamepad velocity teleoperation for the TONY5 Aero
+  V1 and Omni tasks.
+- Added a standalone TONY5 Aero V1 motor and aerodynamic-load diagnostic runner
+  for constrained/free-flight, H-force, body-fluid, and checkpoint-ramp tests.
+- Enabled the existing MuJoCo-Warp NaN state dump guard for TONY5 Aero V1;
+  V0 remains unchanged.
+- Added a diagnostic-only TONY5 Aero V1 NaN ablation runner with body-aero and
+  H-force switches plus first-divergence threshold capture.
+- Added V1-only numerical safety monitoring with per-substep force suppression,
+  finite-state detection, episode metrics, and focused regression tests.
+- Added the V3 global-wind Omni task with independent optional CT(J)/CQ(J),
+  blade-flapping, and battery-sag infrastructure, all disabled by default and
+  guarded against non-finite aerodynamic or electrical values.
+- Added V3 process-local H-force calibration sweeps and controlled battery
+  diagnostics, including 4096-environment wind-off/on and combined-feature
+  smoke checks.
+- Enabled all optional V3 physics features in training and play mode: static
+  CT/CQ fallback, blade flapping, battery sag, wind, and gusts.
+- Made V3 wind and gust activation a shared 50% full-reset event; disabled
+  resets run with both external wind effects off.
 
 Changed
 ^^^^^^^
 
+- Fixed TONY5 Omni V3 keyboard and gamepad horizontal commands to use fixed
+  world-frame X/Y axes, matching the V3 policy observations and rewards; V0
+  body-frame manual control is unchanged.
+- Changed TONY5 play speed controls to native main-keyboard or keypad
+  ``+``/``-`` keys and increased the manual play-only horizontal-speed ceiling
+  to ``100 m/s``; training command limits remain unchanged.
+- Changed V1/V3 numerical safety termination to use root speed above
+  ``150 m/s``, body angular speed above ``200 rad/s``, absolute ``qacc`` above
+  ``400,000``, or non-finite state; the rotor-qvel threshold was removed and
+  safety flags no longer suppress custom rotor forces or motor voltage.
+- Changed V3 play wind/gust flags to force 100% episode activation when either
+  feature is enabled; training retains the 50% full-reset activation.
+- Added an ``M`` play control and Viser button to immediately resample the
+  velocity command and, for V3, the shared wind/gust process.
+- Changed TONY5 Aero Omni V3 background wind to sample a shared horizontal
+  speed uniformly from 0--10 m/s in any x/y direction, with vertical wind
+  limited to -1--+1 m/s on full resets; command resampling is now 1--10 s and
+  V0 is unchanged.
+- Reduced routine TONY5 Aero Omni V3 logging to core safety, total-wind,
+  voltage-sag, velocity-error, and active reward metrics; detailed prop,
+  flapping, electrical, and per-axis wind diagnostics are no longer logged
+  every episode.
+- Reduced the V3 play Rewards panel to active nonzero reward terms only; the
+  training reward configuration remains fully editable.
+- Added V3 play switches ``--wind`` and ``--gusts``; both default to enabled
+  and can be disabled independently.
+- Enabled ``--keyboard`` and ``--gamepad`` for TONY5 Omni V3 play mode.
+- Fixed V3 world-frame command observations and rewards to read the canonical
+  world command buffer after keyboard/gamepad conversion; V0 is unchanged.
+- Changed V3 automatic resume checkpoint selection to use timestamped V3 runs
+  only, excluding the incompatible ``v0_bootstrap`` checkpoint.
+- Increased default play playback speed to ``1.2x`` (20% faster); physics and
+  policy timing remain unchanged, and ``--playback-speed`` can override it.
+- Added a V3-only motor/rotor torque-squared penalty with weight ``-1e-6``;
+  V0 and Omni V0 rewards are unchanged.
+- Fixed the V3 motor/rotor torque penalty to use native actuator-force values;
+  this avoids invalid generalized-DOF indexing on CUDA during ``env.step``.
+- Centralized the complete V3 reward table and its tunable parameters in
+  ``tony5_omni_v3_rewards.py``; reward values remain unchanged.
+- Disabled command-transition smoothing for TONY5 Aero Omni V3 so sampled
+  velocity targets are applied immediately; V0 command smoothing is unchanged.
+- Changed default play checkpoint selection for TONY5 Aero Omni V3 to skip the
+  incompatible ``v0_bootstrap`` checkpoint after the V3 observation size change.
+- Changed TONY5 Aero Omni V3 observations to use world-frame linear velocity,
+  explicit world-frame commands, and sine/cosine heading observations so world
+  velocity tracking remains observable after yaw rotation; V0 is unchanged.
+- Changed only TONY5 Aero Omni V3 linear velocity commands and tracking to
+  world-frame x/y/z values; yaw-rate tracking remains body-frame and V0 is
+  unchanged.
+- Disabled unintended generic MuJoCo rotor-body fluid loading in TONY5 Aero V1
+  with negligible zero-coefficient fluid geoms; V0 is unchanged.
+- Changed TONY5 Aero V1 exploration to a fixed ``0.12`` actor standard
+  deviation with zero entropy while leaving V0 PPO unchanged.
+- Changed only the TONY5 Aero V1 ESC voltage clamp to ``0``-``22.2 V`` with
+  asymmetric anti-windup; V0 retains its bidirectional voltage behavior.
+- Added TONY5 target-position and target-yaw debug markers to the viewer and
+  enabled a filtered full PID speed loop with conditional integral anti-windup.
+- Changed TONY5 Aero V1 uprightness and roll/pitch-rate reward terms to relax
+  with commanded horizontal speed while preserving yaw tracking and V0 rewards.
+- Changed TONY5 Aero V1 to replace its uprightness reward with a gravity-free
+  body-acceleration penalty while leaving V0 unchanged.
+- Centralized the editable TONY5 Aero V1 reward coefficients in its environment
+  configuration without changing the V0 reward table.
+- Changed TONY5 Aero V1 PPO entropy coefficient to 0.003 and restored its
+  learnable 0.6 initial actor standard deviation without an explicit range;
+  V0 is unchanged.
+- Added a 0.75-second settled high-speed RMSE diagnostic to TONY5 Aero V1 while
+  retaining the transient high-speed RMSE diagnostic.
+- Changed TONY5 Aero V1 to a deterministic four-stage curriculum: 2 m/s for the
+  first 50 PPO iterations, 6 m/s for the next 50, 10 m/s for the next 100, and
+  27.78 m/s for the remainder of training.
+- Added a V1-only ``--high-speed-only`` play option that samples radial command
+  speeds from 15 to 27.78 m/s, with configurable lower and upper bounds.
+- Added a play-only ``--disturbance`` option for symmetric random base torque
+  disturbances on the TONY5 Aero velocity tasks; training configurations and V0
+  are unchanged.
+- Removed the V1 angle/attitude termination while retaining it in V0.
+- Added an editable soft downward-velocity reward penalty alongside the V1
+  measured downward-velocity termination at -3.0 m/s; yaw-rate and vertical
+  command limits still taper near the 27.78 m/s stage.
+- Added a V1 roll-only uprightness reward with the existing 0.1 weight that
+  activates only when commanded horizontal speed is above 8 m/s; V0 is unchanged.
+- Changed the V1 body-acceleration penalty to a body-angular-acceleration
+  penalty using MuJoCo's frame angular-acceleration sensor; V0 is unchanged.
+- Changed only V1 high-speed horizontal command directions to progressively
+  bias toward body-frame forward flight while retaining full omnidirectional
+  sampling through 10 m/s.
+- Changed TONY5 play mode to resample position and yaw targets every 4–8 seconds.
+- Changed the TONY5 normalized rotor-speed action ceiling to 2600 rad/s so the
+  full positive action range remains reachable with the V0 motor model.
+- Changed TONY5 velocity play mode to use one environment by default; the play
+  command automatically loads the newest local velocity-policy checkpoint.
+- Relaxed TONY5 velocity tracking, increased action-rate smoothing, sampled
+  zero-velocity hover commands more often, and disabled ground contact and
+  ground-based termination for the velocity task.
+- Versioned the TONY5 velocity PPO experiment for the new five-frame observation
+  shape so older 22-value checkpoints are not loaded accidentally.
+- Changed TONY5 Aero V1 velocity commands to use four radial horizontal-speed
+  stages at 2, 6, 10, and 27.78 m/s, with previous-stage, current, and
+  high-speed sampling branches.
+- Changed TONY5 Aero V1 moving-command sampling to 50% previous-stage range,
+  30% current-range, and 20% high-speed commands, with speed-dependent yaw
+  limits; the high-speed RMSE remains diagnostic only.
+- Reduced routine TONY5 Aero V1 logging to core tracking, curriculum, and
+  numerical-safety metrics; zero-weight reward terms remain configured but are
+  omitted from episodic reward diagnostics, and the always-zero timeout
+  diagnostic is omitted while the timeout termination remains active.
+- Changed TONY5 Aero V1 actor exploration to a learnable ``0.6`` initial
+  standard deviation with entropy coefficient ``0.003``; V0 is unchanged.
+- Changed TONY5 Aero V1 linear-velocity tracking sigma to a fixed value of
+  ``2.0`` at every commanded speed; V0 and angular tracking sigma are unchanged.
+- Added ``Mjlab-Tony5-Velocity-Aero-Omni-v0`` with fixed omnidirectional radial
+  horizontal commands bounded at ``10 m/s`` and no curriculum progression.
+- Added ``Mjlab-Tony5-Velocity-Aero-Omni-v3`` with one global canonical wind
+  vector shared by native body fluid aerodynamics and custom rotor H-force,
+  plus optional correlated global gusts; Omni V0 is unchanged.
+- Changed V3 play mode to enable a ``+X 2 m/s`` background wind and correlated
+  gusts by default; enlarged play-only base-torque disturbances to ``0.05 N*m``
+  and apply them for ``0.5 s`` at uniformly chosen 3--6 second intervals; the
+  viewer shows a single green total-wind arrow and a magenta disturbance arrow.
+- Added a separate editable Omni reward table so its reward weights can be
+  tuned without modifying TONY5 V0 or Aero-v1.
+- Reduced the Omni smooth command transition time from ``1.0 s`` to
+  approximately ``0.333 s`` while retaining smoothstep easing.
+- Enabled ``--keyboard`` play control for the Omni task, including its smooth
+  command transitions.
+- Changed TONY5 native-viewer keyboard speed controls to ``I``/``O`` because
+  MuJoCo reserves ``+``/``-`` for its built-in real-time speed shortcuts;
+  Viser ``+``/``-`` buttons remain unchanged.
+- Changed TONY5 Aero V1 and Omni vertical velocity commands to the symmetric
+  ``-3`` to ``+3 m/s`` range.
+- Changed the V1 rapid-descent termination threshold to measured downward
+  velocity below ``-5 m/s``; its separate soft reward threshold remains
+  ``-3 m/s``.
+- Relaxed V1 numerical-safety limits by 2x: root speed ``100 m/s``, body
+  angular speed ``60 rad/s``, rotor speed ``7,000 rad/s``, and absolute
+  acceleration ``2e5``; non-finite states still fail immediately.
+- Added TONY5 Aero V1 speed-adaptive velocity-tracking reward widths and
+  reduced its PPO entropy coefficient while leaving V0 unchanged.
+- Configured the Quad Mini joints with AK70-10 DC motor torque-speed limits,
+  including a 50.3 rad/s velocity limit.
+- Changed the Quad Mini reset root-height range to 0.20-0.25 m.
+- Added five-frame history to the Quad Mini privileged teacher observation and
+  the student-side privileged teacher input.
 - Simplified the Bird environment layout to keep only the
   ``Mjlab-Velocity-Bird-5DoF`` task and its shared robot asset.
 - Added README commands for training and playing the Crawler rough-terrain and
   flat-terrain teacher/student pairs.
+- Matched the Quad Mini soft joint-limit penalty to MuJoCo Playground's direct
+  endpoint scaling for asymmetric joint ranges.
+- Removed the Quad Mini knee collision capsules so only the base and feet
+  participate in robot-terrain collision.
+- Reduced the Quad Mini joint-position action scale from 0.6 to 0.4 to limit
+  commanded knee excursions.
+- Clamped Quad Mini position-control targets to the robot's hard joint limits
+  before sending them to the actuators.
 
 Fixed
 ^^^^^
 
+- Fixed Quad Mini default-pose randomization so ``qpos0`` remains a small joint
+  reference offset instead of cancelling the configured standing pose.
+- Matched the Quad Mini foot-clearance cost to MuJoCo Playground and fixed the
+  foot-air-time reward to use the completed air phase when a foot lands.
+- Fixed the Quad Mini reset height at exactly 0.22 m by removing root-height
+  spawn randomization.
 - Reduced the Quad Mini per-world contact allocation so training with thousands
   of parallel environments no longer exhausts GPU memory during initialization.
 - Clipped Quad Mini policy actions to the normalized ``[-1, 1]`` range before

@@ -3,7 +3,7 @@
 import mujoco
 
 from mjlab import MJLAB_SRC_PATH
-from mjlab.actuator import XmlActuatorCfg
+from mjlab.actuator import DcMotorActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 QUAD_MINI_TUNED_XML = (
@@ -33,7 +33,6 @@ JOINT_NAMES = (
 
 FEET_SITES = ("RF_FOOT", "LF_FOOT", "RH_FOOT", "LH_FOOT")
 FEET_GEOMS = tuple(f"{name}_geom" for name in FEET_SITES)
-KNEE_GEOMS = tuple(f"{name}_KNEE_collision" for name in ("RF", "LF", "RH", "LH"))
 ROOT_BODY = "trunk"
 IMU_SITE = "imu_sensor_site"
 
@@ -54,7 +53,7 @@ DEFAULT_JOINT_POS = {
 
 
 def get_spec() -> mujoco.MjSpec:
-  """Load the feet-only XML and set the nominal Quad Mini PD gains."""
+  """Load the feet-only XML without its position actuators."""
   spec = mujoco.MjSpec.from_file(str(QUAD_MINI_TUNED_XML))
   # The source XML contains unnamed jointpos/jointvel sensors. MJLab wraps every
   # XML sensor by name, so those unnamed sensors are not useful here; joint data is
@@ -64,22 +63,29 @@ def get_spec() -> mujoco.MjSpec:
       spec.delete(sensor)
   for key in list(spec.keys):
     spec.delete(key)
-  for actuator in spec.actuators:
-    actuator.gainprm[0] = 25.0
-    actuator.biasprm[1] = -25.0
-    actuator.biasprm[2] = -0.5
+  for actuator in list(spec.actuators):
+    spec.delete(actuator)
   return spec
 
 
 INIT_STATE = EntityCfg.InitialStateCfg(
-  pos=(0.0, 0.0, 0.21),
+  pos=(0.0, 0.0, 0.22),
   rot=(1.0, 0.0, 0.0, 0.0),
   joint_pos=DEFAULT_JOINT_POS,
   joint_vel={".*": 0.0},
 )
 
 ARTICULATION = EntityArticulationInfoCfg(
-  actuators=(XmlActuatorCfg(target_names_expr=JOINT_NAMES, command_field="position"),),
+  actuators=(
+    DcMotorActuatorCfg(
+      target_names_expr=JOINT_NAMES,
+      stiffness=25.0,
+      damping=0.5,
+      effort_limit=24.0,
+      saturation_effort=24.8,
+      velocity_limit=50.3,
+    ),
+  ),
   soft_joint_pos_limit_factor=0.95,
 )
 
@@ -93,5 +99,5 @@ def get_quad_mini_tuned_robot_cfg() -> EntityCfg:
   )
 
 
-QUAD_MINI_TUNED_ACTION_SCALE = 0.6
+QUAD_MINI_TUNED_ACTION_SCALE = 0.4
 QUAD_MINI_TUNED_EFFORT_LIMIT = 24.0

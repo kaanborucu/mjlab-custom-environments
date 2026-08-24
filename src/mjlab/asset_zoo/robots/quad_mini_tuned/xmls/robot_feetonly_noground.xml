@@ -174,15 +174,6 @@
                 damping="0.12"
                 frictionloss="0.05"/>
             <geom
-                name="RF_KNEE_collision"
-                type="capsule"
-                pos="-0.04 0 0"
-                euler="0 1.58 0"
-                size="0.018 0.0605"
-                contype="1"
-                conaffinity="1"
-                group="2"/>
-            <geom
                 type="mesh"
                 mesh="FR_calf_mesh"
                 material="orange"
@@ -195,6 +186,7 @@
                   name="RF_FOOT_geom"
                   type="sphere"
                   size="0.022"
+                  rgba="0 0 0 0"
                   contype="1"
                   conaffinity="1"
                   condim="3"
@@ -269,15 +261,6 @@
                 damping="0.12"
                 frictionloss="0.05"/>
             <geom
-                name="LF_KNEE_collision"
-                type="capsule"
-                pos="-0.04 0 0"
-                euler="0 1.58 0"
-                size="0.018 0.0605"
-                contype="1"
-                conaffinity="1"
-                group="2"/>
-            <geom
                 type="mesh"
                 mesh="FL_calf_mesh"
                 material="orange"
@@ -290,6 +273,7 @@
                   name="LF_FOOT_geom"
                   type="sphere"
                   size="0.022"
+                  rgba="0 0 0 0"
                   contype="1"
                   conaffinity="1"
                   condim="3"
@@ -364,15 +348,6 @@
                 damping="0.12"
                 frictionloss="0.05"/>
             <geom
-                name="RH_KNEE_collision"
-                type="capsule"
-                pos="-0.04 0 0"
-                euler="0 1.58 0"
-                size="0.018 0.0605"
-                contype="1"
-                conaffinity="1"
-                group="2"/>
-            <geom
                 type="mesh"
                 mesh="HR_calf_mesh"
                 material="orange"
@@ -385,6 +360,7 @@
                   name="RH_FOOT_geom"
                   type="sphere"
                   size="0.022"
+                  rgba="0 0 0 0"
                   contype="1"
                   conaffinity="1"
                   condim="3"
@@ -459,15 +435,6 @@
                 damping="0.12"
                 frictionloss="0.05"/>
             <geom
-                name="LH_KNEE_collision"
-                type="capsule"
-                pos="-0.04 0 0"
-                euler="0 1.58 0"
-                size="0.018 0.0605"
-                contype="1"
-                conaffinity="1"
-                group="2"/>
-            <geom
                 type="mesh"
                 mesh="HL_calf_mesh"
                 material="orange"
@@ -480,6 +447,7 @@
                   name="LH_FOOT_geom"
                   type="sphere"
                   size="0.022"
+                  rgba="0 0 0 0"
                   contype="1"
                   conaffinity="1"
                   condim="3"

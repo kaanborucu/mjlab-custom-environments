@@ -177,6 +177,8 @@ class JointPositionActionCfg(BaseActionCfg):
   """Configuration for joint position control."""
 
   use_default_offset: bool = True
+  clip_to_joint_limits: bool = False
+  """Clamp position targets to each entity's hard joint limits."""
 
   def __post_init__(self):
     self.transmission_type = TransmissionType.JOINT
@@ -212,6 +214,8 @@ class JointEffortActionCfg(BaseActionCfg):
 class JointPositionAction(BaseAction):
   """Control joints via position targets."""
 
+  cfg: JointPositionActionCfg
+
   def __init__(self, cfg: JointPositionActionCfg, env: ManagerBasedRlEnv):
     super().__init__(cfg=cfg, env=env)
 
@@ -221,6 +225,9 @@ class JointPositionAction(BaseAction):
   def apply_actions(self) -> None:
     encoder_bias = self._entity.data.encoder_bias[:, self._target_ids]
     target = self._processed_actions - encoder_bias
+    if self.cfg.clip_to_joint_limits:
+      limits = self._entity.data.default_joint_pos_limits[:, self._target_ids]
+      target = target.clamp(min=limits[..., 0], max=limits[..., 1])
     self._entity.set_joint_position_target(target, joint_ids=self._target_ids)
 
 

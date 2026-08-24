@@ -156,7 +156,10 @@ class BaseViewer(ABC):
     policy: PolicyProtocol,
     frame_rate: float = 30.0,
     verbosity: int = VerbosityLevel.SILENT,
+    initial_speed_multiplier: float = 1.0,
   ):
+    if initial_speed_multiplier <= 0.0:
+      raise ValueError("initial_speed_multiplier must be positive.")
     self.env = env
     self.policy = policy
     self.frame_rate = frame_rate
@@ -171,7 +174,7 @@ class BaseViewer(ABC):
 
     # Speed.
     self._speed_index = self.SPEED_MULTIPLIERS.index(1.0)
-    self._time_multiplier = self.SPEED_MULTIPLIERS[self._speed_index]
+    self._time_multiplier = initial_speed_multiplier
 
     # Physics accumulator and render timer.
     self._sim_budget = 0.0
@@ -202,6 +205,9 @@ class BaseViewer(ABC):
   @abstractmethod
   def is_running(self) -> bool: ...
 
+  def poll_input(self) -> None:  # noqa: B027
+    """Poll optional real-time input devices before processing each tick."""
+
   def _forward_paused(self) -> None:  # noqa: B027
     """Hook for subclasses to run forward kinematics while paused."""
 
@@ -214,6 +220,30 @@ class BaseViewer(ABC):
   def log(self, message: str, level: VerbosityLevel = VerbosityLevel.INFO) -> None:
     if self.verbosity >= level:
       print(message)
+
+  def _robot_velocity_overlay(self) -> tuple[str, str] | None:
+    """Return selected-robot body/world velocity strings when available."""
+    env = self.env.unwrapped
+    scene = getattr(env, "scene", None)
+    if scene is None:
+      return None
+    try:
+      robot = scene["robot"]
+      velocity_b = robot.data.root_link_lin_vel_b[self.cfg.env_idx]
+      velocity_w = robot.data.root_link_lin_vel_w[self.cfg.env_idx]
+    except (AttributeError, IndexError, KeyError, TypeError):
+      return None
+
+    values_b = velocity_b.detach().cpu().tolist()
+    values_w = velocity_w.detach().cpu().tolist()
+    horizontal_speed = float(torch.linalg.vector_norm(velocity_w[:2]).item())
+    return (
+      (f"x={values_b[0]:+.2f} y={values_b[1]:+.2f} z={values_b[2]:+.2f} m/s"),
+      (
+        f"x={values_w[0]:+.2f} y={values_w[1]:+.2f} z={values_w[2]:+.2f} m/s"
+        f" |xy|={horizontal_speed:.2f}"
+      ),
+    )
 
   # Thread-safe action requests.
 
@@ -374,6 +404,7 @@ class BaseViewer(ABC):
     dt = now - self._last_tick_time
     self._last_tick_time = now
 
+    self.poll_input()
     self._process_actions()
 
     if self._is_paused:

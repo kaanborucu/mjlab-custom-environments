@@ -72,9 +72,14 @@ class ViserPlayViewer(BaseViewer):
     verbosity: VerbosityLevel = VerbosityLevel.SILENT,
     viser_server: viser.ViserServer | None = None,
     checkpoint_manager: CheckpointManager | None = None,
+    custom_action_handler: Callable[[ViewerAction, object | None], bool] | None = None,
+    custom_gui_setup: Callable[[Any, Callable[[str, Any], None]], None] | None = None,
+    initial_speed_multiplier: float = 1.0,
   ) -> None:
-    super().__init__(env, policy, frame_rate, verbosity)
+    super().__init__(env, policy, frame_rate, verbosity, initial_speed_multiplier)
     self._ckpt_mgr = checkpoint_manager
+    self._custom_action_handler = custom_action_handler
+    self._custom_gui_setup = custom_gui_setup
     self._term_overlays: ViserTermOverlays | None = None
     self._camera_overlays: ViserCameraOverlays | None = None
     self._debug_overlays: ViserDebugOverlays | None = None
@@ -175,6 +180,9 @@ class ViserPlayViewer(BaseViewer):
             on_change=self._scene.request_update,
             request_action=self.request_action,
           )
+
+      if self._custom_gui_setup is not None:
+        self._custom_gui_setup(self._server, self.request_action)
 
       # Add standard visualization options from MjlabViserScene.
       def _debug_viz_extra() -> None:
@@ -279,6 +287,10 @@ class ViserPlayViewer(BaseViewer):
     action: ViewerAction,
     payload: Optional[Any],
   ) -> bool:
+    if self._custom_action_handler is not None and self._custom_action_handler(
+      action, payload
+    ):
+      return True
     if isinstance(payload, dict) and payload.get("type") == "gui_reset":
       self._handle_gui_reset(payload.get("all_envs", False))
       return True
@@ -563,12 +575,21 @@ class ViserPlayViewer(BaseViewer):
       error_line = (
         f'<br/><span style="color:#e74c3c;"><strong>Error:</strong> {first_line}</span>'
       )
+    velocity_line = ""
+    velocity_overlay = self._robot_velocity_overlay()
+    if velocity_overlay is not None:
+      velocity_b, velocity_w = velocity_overlay
+      velocity_line = (
+        f"<strong>Velocity body:</strong> {velocity_b}<br/>"
+        f"<strong>Velocity world:</strong> {velocity_w}<br/>"
+      )
     self._status_html.content = f"""
       <div style="font-size: 0.85em; line-height: 1.25; padding: 0 1em 0.5em 1em;">
         <strong>Status:</strong> {"Paused" if status.paused else "Running"}{capped}<br/>
         <strong>Steps:</strong> {status.step_count}<br/>
         <strong>Speed:</strong> {status.speed_label}<br/>
         <strong>Target RT:</strong> {status.target_realtime:.2f}x<br/>
-        <strong>Actual RT:</strong> {rt_display} ({status.smoothed_fps:.0f} FPS){error_line}
+        <strong>Actual RT:</strong> {rt_display} ({status.smoothed_fps:.0f} FPS)<br/>
+        {velocity_line}{error_line}
       </div>
       """

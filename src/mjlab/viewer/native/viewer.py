@@ -125,12 +125,21 @@ class NativeMujocoViewer(BaseViewer):
     policy: PolicyProtocol,
     frame_rate: float = 60.0,
     key_callback: Optional[Callable[[int], None]] = None,
+    keyboard_control: bool = False,
+    input_poll_callback: Optional[Callable[[], None]] = None,
+    custom_action_handler: Optional[
+      Callable[[ViewerAction, object | None], bool]
+    ] = None,
     plot_cfg: PlotCfg | None = None,
     enable_perturbations: bool = True,
     verbosity: VerbosityLevel = VerbosityLevel.SILENT,
+    initial_speed_multiplier: float = 1.0,
   ):
-    super().__init__(env, policy, frame_rate, verbosity)
+    super().__init__(env, policy, frame_rate, verbosity, initial_speed_multiplier)
     self.user_key_callback = key_callback
+    self.keyboard_control = keyboard_control
+    self.input_poll_callback = input_poll_callback
+    self.custom_action_handler = custom_action_handler
     self.enable_perturbations = enable_perturbations
 
     self.mjm: Optional[mujoco.MjModel] = None
@@ -154,6 +163,11 @@ class NativeMujocoViewer(BaseViewer):
 
     self.env_idx = self.cfg.env_idx
     self._mj_lock = Lock()
+
+  def poll_input(self) -> None:
+    """Poll input devices on the simulation thread."""
+    if self.input_poll_callback is not None:
+      self.input_poll_callback()
 
   def setup(self) -> None:
     """Setup MuJoCo viewer resources."""
@@ -254,6 +268,11 @@ class NativeMujocoViewer(BaseViewer):
       f"{status.target_realtime:.2f}x\n"
       f"{status.actual_realtime:.2f}x ({status.smoothed_fps:.0f} FPS)"
     )
+    velocity_overlay = self._robot_velocity_overlay()
+    if velocity_overlay is not None:
+      velocity_b, velocity_w = velocity_overlay
+      text_1 += "\nRobot velocity (body)\nRobot velocity (world)"
+      text_2 += f"\n{velocity_b}\n{velocity_w}"
     overlay = (
       mujoco.mjtFontScale.mjFONTSCALE_150.value,
       mujoco.mjtGridPos.mjGRID_TOPLEFT.value,
@@ -449,6 +468,14 @@ class NativeMujocoViewer(BaseViewer):
 
   def _safe_key_callback(self, key: int) -> None:
     """Runs on MuJoCo viewer thread; must not touch env/sim directly."""
+    if self.keyboard_control:
+      if self.user_key_callback:
+        try:
+          self.user_key_callback(key)
+        except Exception as e:
+          self.log(f"[WARN] user key_callback raised: {e}", VerbosityLevel.INFO)
+      return
+
     from mjlab.viewer.native.keys import (
       KEY_A,
       KEY_COMMA,
@@ -496,6 +523,10 @@ class NativeMujocoViewer(BaseViewer):
         mujoco.mj_forward(self.mjm, self.mjd)
 
   def _handle_custom_action(self, action: ViewerAction, payload: object | None) -> bool:
+    if self.custom_action_handler is not None and self.custom_action_handler(
+      action, payload
+    ):
+      return True
     del payload
     if action == ViewerAction.PREV_ENV and self.env.unwrapped.num_envs > 1:
       self.env_idx = (self.env_idx - 1) % self.env.unwrapped.num_envs

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import torch
 
@@ -18,9 +18,154 @@ from mjlab.utils.lab_api.math import sample_uniform
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+  from mjlab.managers import CurriculumTermCfg
 
 
 _DEFAULT_ROBOT_CFG = SceneEntityCfg("robot")
+
+
+QuadRandomizationRange = tuple[float, float] | dict[int, tuple[float, float]]
+QuadRandomizationParamTargets = dict[
+  str, tuple[QuadRandomizationRange, QuadRandomizationRange]
+]
+QuadRandomizationEventTargets = dict[str, dict[str, QuadRandomizationParamTargets]]
+QuadResetRandomizationTargets = dict[
+  str, tuple[QuadRandomizationRange, QuadRandomizationRange]
+]
+
+
+class QuadDomainRandomizationStage(TypedDict):
+  """One step-based Quad Mini domain-randomization stage."""
+
+  step: int
+  light: float
+  physical: float
+
+
+def _interpolate_randomization_range(
+  neutral: QuadRandomizationRange,
+  target: QuadRandomizationRange,
+  strength: float,
+) -> QuadRandomizationRange:
+  """Interpolate a randomization range from nominal to its full target."""
+  if isinstance(neutral, dict):
+    if not isinstance(target, dict) or neutral.keys() != target.keys():
+      raise ValueError("Randomization range dictionaries must have matching keys.")
+    return {
+      axis: (
+        neutral_range[0] + strength * (target[axis][0] - neutral_range[0]),
+        neutral_range[1] + strength * (target[axis][1] - neutral_range[1]),
+      )
+      for axis, neutral_range in neutral.items()
+    }
+  if isinstance(target, dict):
+    raise ValueError("Randomization range types must match.")
+  return (
+    neutral[0] + strength * (target[0] - neutral[0]),
+    neutral[1] + strength * (target[1] - neutral[1]),
+  )
+
+
+class quad_domain_randomization_curriculum:
+  """Apply staged Teacher DR while keeping model parameters fixed between stages."""
+
+  def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv):
+    self._stages: list[QuadDomainRandomizationStage] = cfg.params["stages"]
+    self._event_targets: QuadRandomizationEventTargets = cfg.params["event_targets"]
+    self._reset_targets: QuadResetRandomizationTargets = cfg.params["reset_targets"]
+    self._validate(env)
+    # Teacher startup events are configured to apply stage zero after all
+    # managers have been built, so the first reset does not need to repeat the
+    # expensive MuJoCo model-constant recomputation.
+    self._applied_stage_index = 0
+
+  def _validate(self, env: ManagerBasedRlEnv) -> None:
+    if not self._stages or self._stages[0] != {
+      "step": 0,
+      "light": 0.0,
+      "physical": 0.0,
+    }:
+      raise ValueError(
+        "Quad Mini DR curriculum must begin at step zero with no randomization."
+      )
+    for previous, current in zip(self._stages, self._stages[1:], strict=False):
+      if current["step"] <= previous["step"]:
+        raise ValueError("Quad Mini DR curriculum steps must be strictly increasing.")
+    for stage in self._stages:
+      for key in ("light", "physical"):
+        if not 0.0 <= stage[key] <= 1.0:
+          raise ValueError(f"Quad Mini DR strength {key!r} must be within [0, 1].")
+    active_startup_terms = set(env.event_manager.active_terms.get("startup", ()))
+    configured_terms = {
+      event_name
+      for group_targets in self._event_targets.values()
+      for event_name in group_targets
+    }
+    missing = configured_terms - active_startup_terms
+    if missing:
+      raise ValueError(f"Quad Mini DR startup events are missing: {sorted(missing)}")
+
+  def _apply_event_strengths(
+    self,
+    env: ManagerBasedRlEnv,
+    stage: QuadDomainRandomizationStage,
+  ) -> None:
+    for group_name, group_targets in self._event_targets.items():
+      strength = stage[group_name]  # type: ignore[literal-required]
+      for event_name, param_targets in group_targets.items():
+        event_cfg = env.event_manager.get_term_cfg(event_name)
+        for param_name, (neutral, target) in param_targets.items():
+          event_cfg.params[param_name] = _interpolate_randomization_range(
+            neutral, target, strength
+          )
+
+  def _apply_reset_strength(
+    self,
+    env: ManagerBasedRlEnv,
+    light_strength: float,
+  ) -> None:
+    root_neutral, root_target = self._reset_targets["root_velocity_z"]
+    root_cfg = env.event_manager.get_term_cfg("reset_root_state")
+    root_cfg.params["velocity_range"]["z"] = _interpolate_randomization_range(
+      root_neutral, root_target, light_strength
+    )
+
+    joint_neutral, joint_target = self._reset_targets["joint_position"]
+    joint_cfg = env.event_manager.get_term_cfg("reset_joint_state")
+    joint_cfg.params["position_range"] = _interpolate_randomization_range(
+      joint_neutral, joint_target, light_strength
+    )
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    env_ids: torch.Tensor,
+    stages: list[QuadDomainRandomizationStage],
+    event_targets: QuadRandomizationEventTargets,
+    reset_targets: QuadResetRandomizationTargets,
+  ) -> dict[str, torch.Tensor]:
+    del env_ids, stages, event_targets, reset_targets
+    stage_index = max(
+      index
+      for index, stage in enumerate(self._stages)
+      if env.common_step_counter >= stage["step"]
+    )
+    stage = self._stages[stage_index]
+
+    if stage_index != self._applied_stage_index:
+      self._apply_event_strengths(env, stage)
+      self._apply_reset_strength(env, stage["light"])
+      # Resample every model once at the transition. Reusing startup mode keeps
+      # physical properties fixed until the next stage instead of recomputing
+      # expensive MuJoCo constants on every episode reset.
+      env.event_manager.apply(mode="startup")
+      self._applied_stage_index = stage_index
+
+    return {
+      "stage": torch.tensor(float(stage_index), device=env.device),
+      "light": torch.tensor(stage["light"], device=env.device),
+      "physical": torch.tensor(stage["physical"], device=env.device),
+    }
 
 
 class QuadMiniVelocityCommand(UniformVelocityCommand):
@@ -124,6 +269,27 @@ def quad_base_height(
   return torch.square(asset.data.root_link_pos_w[:, 2] - target_height)
 
 
+def quad_joint_pos_limits(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ROBOT_CFG,
+  soft_limit_factor: float = 0.95,
+) -> torch.Tensor:
+  """Penalize joint positions outside the Playground soft limits.
+
+  MuJoCo Playground scales each asymmetric hard-limit endpoint directly. MJLab's
+  generic joint-limit term builds a centered soft interval instead, which gives
+  different limits for the Quad Mini's asymmetric HFE and KFE ranges.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  hard_limits = asset.data.default_joint_pos_limits[:, asset_cfg.joint_ids]
+  lower = hard_limits[..., 0] * soft_limit_factor
+  upper = hard_limits[..., 1] * soft_limit_factor
+  joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+  out_of_limits = -(joint_pos - lower).clip(max=0.0)
+  out_of_limits += (joint_pos - upper).clip(min=0.0)
+  return torch.sum(out_of_limits, dim=1)
+
+
 def quad_pose(env: ManagerBasedRlEnv) -> torch.Tensor:
   asset: Entity = env.scene["robot"]
   default = asset.data.default_joint_pos
@@ -189,17 +355,14 @@ def quad_energy_cost(
 def quad_feet_clearance(
   env: ManagerBasedRlEnv,
   target_height: float,
-  command_name: str,
   asset_cfg: SceneEntityCfg = _DEFAULT_ROBOT_CFG,
-  command_threshold: float = 0.01,
 ) -> torch.Tensor:
-  """Penalize flat-ground foot clearance while the feet are moving."""
+  """Penalize deviation from the target foot clearance."""
   asset: Entity = env.scene[asset_cfg.name]
   foot_z = asset.data.site_pos_w[:, asset_cfg.site_ids, 2]
   foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]
   velocity_norm = torch.sqrt(torch.linalg.vector_norm(foot_vel_xy, dim=-1))
-  cost = torch.sum(torch.abs(foot_z - target_height) * velocity_norm, dim=1)
-  return cost * _moving_command(env, command_name, command_threshold)
+  return torch.sum(torch.abs(foot_z - target_height) * velocity_norm, dim=1)
 
 
 class QuadFeetHeight:
@@ -249,7 +412,7 @@ def quad_feet_air_time(
 ) -> torch.Tensor:
   """Reward the source task's air time at first contact."""
   sensor: ContactSensor = env.scene[sensor_name]
-  air_time = sensor.data.current_air_time
+  air_time = sensor.data.last_air_time
   assert air_time is not None
   first_contact = sensor.compute_first_contact(dt=env.step_dt)
   reward = torch.sum((air_time - 0.1) * first_contact.float(), dim=1)
@@ -403,7 +566,12 @@ def quad_body_mass(
   operation: str,
   asset_cfg: SceneEntityCfg = _DEFAULT_ROBOT_CFG,
 ) -> None:
-  """Apply the source task's per-body mass scale or torso payload."""
+  """Apply a repeatable per-body mass scale or composed torso payload.
+
+  Scaling always starts from the compiled model default, which prevents
+  curriculum stage transitions from compounding. Additive payload is applied
+  to the current mass so it composes with a preceding whole-robot scale term.
+  """
   if env_ids is None:
     env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
   else:
@@ -412,41 +580,13 @@ def quad_body_mass(
   body_ids = asset.indexing.body_ids[asset_cfg.body_ids].to(dtype=env_ids.dtype)
   env_grid, body_grid = torch.meshgrid(env_ids, body_ids, indexing="ij")
   model_mass = env.sim.model.body_mass
+  default_mass = env.sim.get_default_field("body_mass")
   samples = sample_uniform(
     ranges[0], ranges[1], (len(env_ids), len(body_ids)), env.device
   )
   if operation == "scale":
-    model_mass[env_grid, body_grid] *= samples
+    model_mass[env_grid, body_grid] = default_mass[body_ids].unsqueeze(0) * samples
   elif operation == "add":
     model_mass[env_grid, body_grid] += samples
   else:
     raise ValueError(f"Unsupported Quad Mini mass operation: {operation!r}")
-
-
-@requires_model_fields("qpos0", recompute=RecomputeLevel.set_const_0)
-def quad_default_joint_pose(
-  env: ManagerBasedRlEnv,
-  env_ids: torch.Tensor | None,
-  ranges: tuple[float, float],
-  asset_cfg: SceneEntityCfg = _DEFAULT_ROBOT_CFG,
-) -> None:
-  """Randomize qpos0 and the reset default used by the entity."""
-  if env_ids is None:
-    env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
-  else:
-    env_ids = env_ids.to(device=env.device, dtype=torch.long)
-  asset: Entity = env.scene[asset_cfg.name]
-  joint_ids = asset_cfg.joint_ids
-  if isinstance(joint_ids, slice):
-    joint_ids = torch.arange(asset.num_joints, device=env.device)
-  else:
-    joint_ids = torch.tensor(joint_ids, device=env.device)
-  qpos_ids = asset.indexing.joint_q_adr[joint_ids].to(dtype=env_ids.dtype)
-  default_joint_pos = asset.data.default_joint_pos[0, joint_ids]
-  samples = sample_uniform(
-    ranges[0], ranges[1], (len(env_ids), len(qpos_ids)), env.device
-  )
-  env_grid, qpos_grid = torch.meshgrid(env_ids, qpos_ids, indexing="ij")
-  randomized = default_joint_pos.unsqueeze(0) + samples
-  env.sim.model.qpos0[env_grid, qpos_grid] = randomized
-  asset.data.default_joint_pos[env_ids[:, None], joint_ids] = randomized
