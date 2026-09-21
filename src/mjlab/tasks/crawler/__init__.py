@@ -2,6 +2,8 @@
 
 from mjlab.tasks.crawler.env_cfg import FLAT_CURRICULUM_MAX_ITERATIONS, crawler_env_cfg
 from mjlab.tasks.crawler.rl_cfg import (
+  CRAWLER_FLAT_TEACHER_EXPERIMENT,
+  CRAWLER_ROUGH_TEACHER_EXPERIMENT,
   crawler_distillation_runner_cfg,
   crawler_ppo_runner_cfg,
 )
@@ -77,7 +79,7 @@ register_mjlab_task(
   play_env_cfg=crawler_teacher_env_cfg(play=True),
   rl_cfg=crawler_ppo_runner_cfg(
     max_iterations=400,
-    experiment_name="crawler_3dof_rough_teacher",
+    experiment_name=CRAWLER_ROUGH_TEACHER_EXPERIMENT,
   ),
   runner_cls=None,
 )
@@ -96,7 +98,7 @@ register_mjlab_task(
   play_env_cfg=crawler_teacher_env_cfg(play=True, profile="flat"),
   rl_cfg=crawler_ppo_runner_cfg(
     max_iterations=FLAT_CURRICULUM_MAX_ITERATIONS,
-    experiment_name="crawler_3dof_flat_teacher",
+    experiment_name=CRAWLER_FLAT_TEACHER_EXPERIMENT,
   ),
   runner_cls=None,
 )
@@ -108,6 +110,7 @@ register_mjlab_task(
   rl_cfg=crawler_distillation_runner_cfg(
     max_iterations=FLAT_CURRICULUM_MAX_ITERATIONS,
     experiment_name="crawler_3dof_flat_student",
+    teacher_experiment_name=CRAWLER_FLAT_TEACHER_EXPERIMENT,
   ),
   runner_cls=CrawlerDistillationRunner,
 )

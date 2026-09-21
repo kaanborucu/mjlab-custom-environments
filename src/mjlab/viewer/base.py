@@ -76,7 +76,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import TYPE_CHECKING, Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
 import torch
 
@@ -157,6 +157,7 @@ class BaseViewer(ABC):
     frame_rate: float = 30.0,
     verbosity: int = VerbosityLevel.SILENT,
     initial_speed_multiplier: float = 1.0,
+    status_overlay: Callable[[], tuple[str, str]] | None = None,
   ):
     if initial_speed_multiplier <= 0.0:
       raise ValueError("initial_speed_multiplier must be positive.")
@@ -166,6 +167,7 @@ class BaseViewer(ABC):
     self.frame_time = 1.0 / frame_rate
     self.verbosity = VerbosityLevel(verbosity)
     self.cfg = env.cfg.viewer
+    self._status_overlay = status_overlay
 
     # State.
     self._is_paused = False

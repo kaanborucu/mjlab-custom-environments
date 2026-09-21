@@ -29,7 +29,7 @@ from mjlab.asset_zoo.robots.crawler_3dof.robot_cfg import (
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.envs.types import VecEnvObs
-from mjlab.rl import RslRlOnPolicyRunnerCfg
+from mjlab.rl import MjlabOnPolicyRunner, RslRlOnPolicyRunnerCfg
 from mjlab.tasks.crawler import (
   FLAT_STUDENT_TASK_ID,
   FLAT_TEACHER_TASK_ID,
@@ -54,7 +54,15 @@ from mjlab.tasks.crawler.env_cfg import (
   OBSERVATION_NOISE,
   REWARD_WEIGHTS,
 )
-from mjlab.tasks.crawler.rl_cfg import CrawlerDistillationRunnerCfg
+from mjlab.tasks.crawler.rl_cfg import (
+  CRAWLER_FLAT_TEACHER_EXPERIMENT,
+  CRAWLER_ROUGH_TEACHER_EXPERIMENT,
+  CrawlerDistillationRunnerCfg,
+)
+from mjlab.tasks.crawler.teacher_student_runner import (
+  CrawlerDistillationRunner,
+  _get_latest_teacher_checkpoint,
+)
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.terrains import HfRandomUniformTerrainCfg
@@ -361,14 +369,24 @@ def test_teacher_student_runner_uses_separate_observation_sets() -> None:
   assert isinstance(cfg, CrawlerDistillationRunnerCfg)
   assert cfg.obs_groups == {"student": ("actor",), "teacher": ("critic",)}
   assert cfg.algorithm.class_name == "Distillation"
+  assert cfg.algorithm.gradient_length == cfg.num_steps_per_env
+  assert cfg.student.distribution_cfg == {
+    "class_name": "GaussianDistribution",
+    "init_std": 1.0e-6,
+    "std_type": "scalar",
+    "std_range": (1.0e-6, 1.0e-6),
+    "learn_std": False,
+  }
   assert cfg.student.hidden_dims == (256, 128, 64)
   assert cfg.teacher.hidden_dims == (256, 128, 64)
   assert cfg.experiment_name == "crawler_3dof_rough_student"
+  assert cfg.teacher_experiment_name == CRAWLER_ROUGH_TEACHER_EXPERIMENT
   teacher_cfg = load_rl_cfg(TEACHER_TASK_ID)
   assert teacher_cfg.experiment_name == "crawler_3dof_rough_teacher"
   flat_cfg = load_rl_cfg(FLAT_STUDENT_TASK_ID)
   assert isinstance(flat_cfg, CrawlerDistillationRunnerCfg)
   assert flat_cfg.experiment_name == "crawler_3dof_flat_student"
+  assert flat_cfg.teacher_experiment_name == CRAWLER_FLAT_TEACHER_EXPERIMENT
   flat_teacher_cfg = load_rl_cfg(FLAT_TEACHER_TASK_ID)
   assert flat_teacher_cfg.experiment_name == "crawler_3dof_flat_teacher"
   assert (
@@ -376,6 +394,55 @@ def test_teacher_student_runner_uses_separate_observation_sets() -> None:
     == flat_teacher_cfg.max_iterations
     == FLAT_CURRICULUM_MAX_ITERATIONS
   )
+
+
+def test_crawler_student_auto_selects_latest_teacher_checkpoint(tmp_path) -> None:
+  log_root = tmp_path / "logs" / "rsl_rl"
+  student_run = log_root / "crawler_3dof_flat_student" / "student-run"
+  teacher_old = log_root / CRAWLER_FLAT_TEACHER_EXPERIMENT / "2026-01-01"
+  teacher_latest = log_root / CRAWLER_FLAT_TEACHER_EXPERIMENT / "2026-01-02"
+  for checkpoint in (
+    teacher_old / "model_100.pt",
+    teacher_latest / "model_100.pt",
+    teacher_latest / "model_200.pt",
+  ):
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.touch()
+
+  assert _get_latest_teacher_checkpoint(
+    str(student_run), CRAWLER_FLAT_TEACHER_EXPERIMENT
+  ) == (teacher_latest / "model_200.pt")
+
+
+def test_crawler_student_requires_teacher_checkpoint(tmp_path) -> None:
+  student_run = tmp_path / "logs" / "rsl_rl" / "student" / "run"
+  with pytest.raises(ValueError, match="Train the matching teacher first"):
+    _get_latest_teacher_checkpoint(str(student_run), CRAWLER_ROUGH_TEACHER_EXPERIMENT)
+
+
+def test_crawler_student_resume_preserves_selected_teacher(monkeypatch) -> None:
+  captured_load_cfg = None
+
+  def fake_load(
+    _runner,
+    _path,
+    load_cfg=None,
+    strict=True,
+    map_location=None,
+  ):
+    nonlocal captured_load_cfg
+    captured_load_cfg = load_cfg
+    return {}
+
+  monkeypatch.setattr(MjlabOnPolicyRunner, "load", fake_load)
+  runner = object.__new__(CrawlerDistillationRunner)
+  runner.load("student_checkpoint.pt")
+
+  assert captured_load_cfg == {
+    "student": True,
+    "optimizer": True,
+    "iteration": True,
+  }
 
 
 def test_domain_randomization_is_training_only_and_centrally_tuned() -> None:

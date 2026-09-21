@@ -9,7 +9,7 @@ import mujoco
 import pytest
 import torch
 
-from mjlab.actuator import DcMotorActuatorCfg
+from mjlab.actuator import XmlActuatorCfg
 from mjlab.asset_zoo.robots.quad_mini_tuned.quad_constants import (
   DEFAULT_JOINT_POS,
   get_quad_mini_tuned_robot_cfg,
@@ -93,13 +93,18 @@ def test_quad_robot_asset_compiles() -> None:
     assert model.geom_rgba[geom_id, 3] == pytest.approx(0.0)
 
 
-def test_quad_uses_ak70_10_dc_motor_limits() -> None:
+def test_quad_uses_native_position_actuators() -> None:
   robot_cfg = get_quad_mini_tuned_robot_cfg()
   assert robot_cfg.articulation is not None
   assert len(robot_cfg.articulation.actuators) == 1
   actuator = robot_cfg.articulation.actuators[0]
-  assert isinstance(actuator, DcMotorActuatorCfg)
-  assert actuator.velocity_limit == pytest.approx(50.3)
+  assert isinstance(actuator, XmlActuatorCfg)
+  assert actuator.command_field == "position"
+
+  model = Entity(robot_cfg).compile()
+  assert model.actuator_gainprm[:, 0].tolist() == pytest.approx([25.0] * 12)
+  assert model.actuator_biasprm[:, 1].tolist() == pytest.approx([-25.0] * 12)
+  assert model.actuator_biasprm[:, 2].tolist() == pytest.approx([-0.25] * 12)
 
 
 def test_quad_task_is_registered() -> None:
@@ -415,6 +420,11 @@ def test_quad_student_runner_uses_clean_teacher_group() -> None:
   assert isinstance(cfg, QuadMiniTunedDistillationRunnerCfg)
   assert cfg.obs_groups == {"student": ("actor",), "teacher": ("critic",)}
   assert cfg.algorithm.class_name == "Distillation"
+  assert cfg.algorithm.gradient_length == cfg.num_steps_per_env == 24
+  assert cfg.student.distribution_cfg is not None
+  assert cfg.student.distribution_cfg["init_std"] == pytest.approx(1.0e-6)
+  assert cfg.student.distribution_cfg["std_range"] == pytest.approx((1.0e-6, 1.0e-6))
+  assert cfg.student.distribution_cfg["learn_std"] is False
 
 
 def test_quad_student_auto_selects_latest_teacher_checkpoint(tmp_path) -> None:

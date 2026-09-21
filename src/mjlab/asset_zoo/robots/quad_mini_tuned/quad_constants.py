@@ -3,7 +3,7 @@
 import mujoco
 
 from mjlab import MJLAB_SRC_PATH
-from mjlab.actuator import DcMotorActuatorCfg
+from mjlab.actuator import XmlActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 QUAD_MINI_TUNED_XML = (
@@ -53,7 +53,7 @@ DEFAULT_JOINT_POS = {
 
 
 def get_spec() -> mujoco.MjSpec:
-  """Load the feet-only XML without its position actuators."""
+  """Load the feet-only XML and configure its native position actuators."""
   spec = mujoco.MjSpec.from_file(str(QUAD_MINI_TUNED_XML))
   # The source XML contains unnamed jointpos/jointvel sensors. MJLab wraps every
   # XML sensor by name, so those unnamed sensors are not useful here; joint data is
@@ -63,8 +63,13 @@ def get_spec() -> mujoco.MjSpec:
       spec.delete(sensor)
   for key in list(spec.keys):
     spec.delete(key)
-  for actuator in list(spec.actuators):
-    spec.delete(actuator)
+  # Keep the XML position actuators so MuJoCo integrates their PD forces
+  # implicitly.  Computing the same PD torque in Python is unstable for this
+  # robot's light lower legs at the 4 ms simulation timestep.
+  for actuator in spec.actuators:
+    actuator.gainprm[0] = 25.0
+    actuator.biasprm[1] = -25.0
+    actuator.biasprm[2] = -0.25
   return spec
 
 
@@ -76,16 +81,7 @@ INIT_STATE = EntityCfg.InitialStateCfg(
 )
 
 ARTICULATION = EntityArticulationInfoCfg(
-  actuators=(
-    DcMotorActuatorCfg(
-      target_names_expr=JOINT_NAMES,
-      stiffness=25.0,
-      damping=0.5,
-      effort_limit=24.0,
-      saturation_effort=24.8,
-      velocity_limit=50.3,
-    ),
-  ),
+  actuators=(XmlActuatorCfg(target_names_expr=JOINT_NAMES, command_field="position"),),
   soft_joint_pos_limit_factor=0.95,
 )
 
@@ -99,5 +95,5 @@ def get_quad_mini_tuned_robot_cfg() -> EntityCfg:
   )
 
 
-QUAD_MINI_TUNED_ACTION_SCALE = 0.4
+QUAD_MINI_TUNED_ACTION_SCALE = 0.6
 QUAD_MINI_TUNED_EFFORT_LIMIT = 24.0

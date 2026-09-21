@@ -291,6 +291,7 @@ def body_mass(
   operation: Operation | str = "scale",
   axes: list[int] | None = None,
   shared_random: bool = False,
+  warn: bool = True,
 ) -> None:
   """Randomize body mass. Triggers ``set_const`` recomputation.
 
@@ -303,15 +304,16 @@ def body_mass(
     correctly. ``body_mass`` alone is only appropriate when modelling a
     point mass added at the COM (which contributes zero inertia).
   """
-  warnings.warn(
-    "dr.body_mass only randomizes mass and leaves the inertia tensor "
-    "unchanged. For a physically consistent density change, use "
-    "dr.pseudo_inertia(alpha_range=...) instead, which scales both mass "
-    "and inertia together. dr.body_mass is only appropriate when modelling "
-    "a point mass added at the COM.",
-    UserWarning,
-    stacklevel=2,
-  )
+  if warn:
+    warnings.warn(
+      "dr.body_mass only randomizes mass and leaves the inertia tensor "
+      "unchanged. For a physically consistent density change, use "
+      "dr.pseudo_inertia(alpha_range=...) instead, which scales both mass "
+      "and inertia together. dr.body_mass is only appropriate when modelling "
+      "a point mass added at the COM.",
+      UserWarning,
+      stacklevel=2,
+    )
   _randomize_model_field(
     env,
     env_ids,
@@ -323,6 +325,38 @@ def body_mass(
     asset_cfg=asset_cfg,
     axes=axes,
     shared_random=shared_random,
+  )
+
+
+@requires_model_fields("body_inertia", recompute=RecomputeLevel.set_const)
+def body_inertia(
+  env: ManagerBasedRlEnv,
+  env_ids: torch.Tensor | None,
+  ranges: Ranges,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+  distribution: Distribution | str = "uniform",
+  operation: Operation | str = "scale",
+  axes: list[int] | None = None,
+  shared_random: bool = False,
+) -> None:
+  """Randomize principal body inertia values.
+
+  The body principal-frame orientation and center of mass are left unchanged.
+  The inertia tensor remains physically valid because positive nominal principal
+  moments are multiplied by the sampled positive scale factors.
+  """
+  _randomize_model_field(
+    env,
+    env_ids,
+    "body_inertia",
+    entity_type="body",
+    ranges=ranges,
+    distribution=distribution,
+    operation=operation,
+    asset_cfg=asset_cfg,
+    axes=axes,
+    shared_random=shared_random,
+    default_axes=[0, 1, 2],
   )
 
 

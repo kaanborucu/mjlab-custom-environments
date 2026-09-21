@@ -1,4 +1,4 @@
-"""RSL-RL runner glue for crawler teacher/student distillation."""
+"""RSL-RL runner glue for original Go1 teacher/student distillation."""
 
 from pathlib import Path
 from typing import Any
@@ -7,17 +7,19 @@ import torch
 from rsl_rl.env import VecEnv
 
 from mjlab.rl import MjlabOnPolicyRunner
-from mjlab.tasks.crawler.rl_cfg import (
-  CRAWLER_ROUGH_TEACHER_EXPERIMENT,
-)
 from mjlab.utils.os import get_checkpoint_path
 
+from .rl_cfg import (
+  GO1_ORIGINAL_ROUGH_TEACHER_EXPERIMENT,
+  GO1_ORIGINAL_TEACHER_EXPERIMENT,
+)
 
-def _get_latest_teacher_checkpoint(log_dir: str, teacher_experiment: str) -> Path:
-  """Find the newest checkpoint in the latest matching crawler teacher run."""
+
+def _get_latest_teacher_checkpoint(log_dir: str, experiment_name: str) -> Path:
+  """Find the newest checkpoint in the latest original Go1 teacher run."""
   student_experiment_root = Path(log_dir).parent
   log_root = student_experiment_root.parent
-  teacher_experiment_root = log_root / teacher_experiment
+  teacher_experiment_root = log_root / experiment_name
   try:
     return get_checkpoint_path(
       teacher_experiment_root,
@@ -26,34 +28,28 @@ def _get_latest_teacher_checkpoint(log_dir: str, teacher_experiment: str) -> Pat
     )
   except ValueError as exc:
     raise ValueError(
-      "No crawler teacher checkpoint was found. Train the matching teacher "
-      "first or provide `--agent.teacher-checkpoint /path/to/model.pt`."
+      "No original Go1 teacher checkpoint was found. Train the teacher first "
+      "or provide `--agent.teacher-checkpoint /path/to/model.pt`."
     ) from exc
 
 
-class CrawlerDistillationRunner(MjlabOnPolicyRunner):
-  """Use MJLab checkpoint handling with RSL-RL's Distillation algorithm.
+class Go1OriginalDistillationRunner(MjlabOnPolicyRunner):
+  """Distillation runner with automatic original Go1 teacher loading."""
 
-  The play script uses the generic ``actor`` load key. Distillation checkpoints
-  call that model ``student``, so this adapter keeps play and hot-reload behavior
-  compatible without changing the global runner or existing tasks.
-  """
+  teacher_experiment = GO1_ORIGINAL_TEACHER_EXPERIMENT
 
   def __init__(
     self,
     env: VecEnv,
-    train_cfg: dict,
+    train_cfg: dict[str, Any],
     log_dir: str | None = None,
     device: str = "cpu",
   ) -> None:
     teacher_checkpoint = train_cfg.pop("teacher_checkpoint", None)
-    teacher_experiment = train_cfg.pop(
-      "teacher_experiment_name", CRAWLER_ROUGH_TEACHER_EXPERIMENT
-    )
     auto_selected = False
     if teacher_checkpoint is None and log_dir is not None:
       teacher_checkpoint = str(
-        _get_latest_teacher_checkpoint(log_dir, teacher_experiment)
+        _get_latest_teacher_checkpoint(log_dir, self.teacher_experiment)
       )
       auto_selected = True
     for key in ("student", "teacher"):
@@ -75,7 +71,8 @@ class CrawlerDistillationRunner(MjlabOnPolicyRunner):
       )
       selection = "auto-selected" if auto_selected else "provided"
       print(
-        f"[INFO] Loaded {selection} crawler teacher checkpoint: {teacher_checkpoint}"
+        f"[INFO] Loaded {selection} original Go1 teacher checkpoint: "
+        f"{teacher_checkpoint}"
       )
 
   def load(
@@ -85,19 +82,9 @@ class CrawlerDistillationRunner(MjlabOnPolicyRunner):
     strict: bool = True,
     map_location: str | None = None,
   ) -> dict:
-    # A training resume must not replace the freshly selected teacher with the
-    # potentially uninitialized teacher stored in an older student checkpoint.
-    if load_cfg is None:
-      load_cfg = {
-        "student": True,
-        "optimizer": True,
-        "iteration": True,
-      }
+    """Map the generic play actor key to the distillation student key."""
     if load_cfg is not None and "actor" in load_cfg:
-      load_cfg = {
-        **load_cfg,
-        "student": load_cfg["actor"],
-      }
+      load_cfg = {**load_cfg, "student": load_cfg["actor"]}
       load_cfg.pop("actor", None)
     return super().load(
       path,
@@ -105,3 +92,15 @@ class CrawlerDistillationRunner(MjlabOnPolicyRunner):
       strict=strict,
       map_location=map_location,
     )
+
+
+class Go1OriginalRoughDistillationRunner(Go1OriginalDistillationRunner):
+  """Distillation runner that loads the original rough Go1 teacher."""
+
+  teacher_experiment = GO1_ORIGINAL_ROUGH_TEACHER_EXPERIMENT
+
+
+__all__ = [
+  "Go1OriginalDistillationRunner",
+  "Go1OriginalRoughDistillationRunner",
+]

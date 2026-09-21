@@ -14,15 +14,20 @@ from mjlab.scripts.play import (
   RandomBaseTorqueDisturbance,
   Tony5KeyboardController,
   Tony5PlayResampler,
+  UniformVelocityKeyboardController,
+  _adapt_legacy_tony5_v5_actor_state,
   _apply_gamepad_deadzone,
   _get_latest_local_checkpoint,
 )
 from mjlab.viewer.native.keys import (
+  KEY_E,
   KEY_EQUAL,
   KEY_KP_ADD,
   KEY_KP_SUBTRACT,
   KEY_M,
   KEY_MINUS,
+  KEY_W,
+  KEY_X,
 )
 
 
@@ -32,6 +37,31 @@ def test_play_defaults_enable_v3_wind_and_gusts() -> None:
   assert cfg.wind
   assert cfg.gusts
   assert cfg.playback_speed == pytest.approx(1.2)
+
+
+def test_legacy_v5_checkpoint_gets_heading_history_columns() -> None:
+  """Old 115-input V5 actors load while ignoring newly added heading inputs."""
+  first_layer = torch.arange(2 * 115, dtype=torch.float32).reshape(2, 115)
+  mean = torch.zeros((1, 115))
+  var = torch.ones((1, 115))
+  std = torch.ones((1, 115))
+  loaded = {
+    "actor_state_dict": {
+      "mlp.0.weight": first_layer,
+      "obs_normalizer._mean": mean,
+      "obs_normalizer._var": var,
+      "obs_normalizer._std": std,
+    }
+  }
+
+  assert _adapt_legacy_tony5_v5_actor_state(loaded)
+  actor = loaded["actor_state_dict"]
+  assert actor["mlp.0.weight"].shape == (2, 125)
+  assert torch.equal(actor["mlp.0.weight"][..., :70], first_layer[..., :70])
+  assert torch.count_nonzero(actor["mlp.0.weight"][..., 70:80]) == 0
+  assert torch.equal(actor["mlp.0.weight"][..., 80:], first_layer[..., 70:])
+  assert actor["obs_normalizer._mean"].shape == (1, 125)
+  assert torch.all(actor["obs_normalizer._var"] == 1.0)
 
 
 @pytest.mark.parametrize(
@@ -85,6 +115,23 @@ def test_keyboard_lowercase_m_key_requests_resampling() -> None:
   controller._handle_key(ord("m"))
 
   callback.assert_called_once_with()
+
+
+def test_go1_keyboard_modes_use_standard_twist_command() -> None:
+  """Go1 keyboard keys map to standard velocity command modes."""
+  command = Mock()
+  controller = object.__new__(UniformVelocityKeyboardController)
+  controller.command = command
+
+  controller._handle_key(KEY_W)
+  controller._handle_key(KEY_E)
+  controller._handle_key(KEY_X)
+
+  assert command.set_keyboard_mode.call_args_list == [
+    (("forward",), {}),
+    (("yaw_right",), {}),
+    (("hover",), {}),
+  ]
 
 
 def test_play_resampler_resamples_command_and_wind() -> None:

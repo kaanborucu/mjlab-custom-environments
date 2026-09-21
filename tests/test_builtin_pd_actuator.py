@@ -377,6 +377,45 @@ def test_dr_pd_gains_abs_writes_correct_columns(device):
   )
 
 
+def test_dr_pd_gains_shared_random_uses_one_gain_per_environment(device):
+  """Shared randomization gives all targets the same Kp and Kd per env."""
+  env = _scene_env(device)
+  act = env.scene["robot"].actuators[0]
+  assert isinstance(act, BuiltinPdActuator)
+  n = act.num_targets
+  pos_ids = act.global_ctrl_ids[:n]
+  vel_ids = act.global_ctrl_ids[n:]
+  env.sim.expand_model_fields(("actuator_gainprm", "actuator_biasprm"))
+
+  dr.pd_gains(
+    env,
+    torch.tensor([0, 1], device=device),
+    kp_range=(20.0, 40.0),
+    kd_range=(0.5, 2.5),
+    asset_cfg=SceneEntityCfg("robot"),
+    operation="abs",
+    shared_random=True,
+  )
+
+  m = env.sim.model
+  assert torch.allclose(
+    m.actuator_gainprm[:, pos_ids, 0],
+    m.actuator_gainprm[:, pos_ids[:1], 0].expand(-1, n),
+  )
+  assert torch.allclose(
+    m.actuator_biasprm[:, vel_ids, 2],
+    m.actuator_biasprm[:, vel_ids[:1], 2].expand(-1, n),
+  )
+  assert torch.all(
+    (m.actuator_gainprm[:, pos_ids, 0] >= 20.0)
+    & (m.actuator_gainprm[:, pos_ids, 0] <= 40.0)
+  )
+  assert torch.all(
+    (-m.actuator_biasprm[:, vel_ids, 2] >= 0.5)
+    & (-m.actuator_biasprm[:, vel_ids, 2] <= 2.5)
+  )
+
+
 def test_dr_effort_limits_writes_jnt_actfrcrange(device):
   env = _scene_env(device, transmission=TransmissionType.JOINT)
   robot = env.scene["robot"]

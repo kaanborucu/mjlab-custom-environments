@@ -10,6 +10,8 @@ from mjlab.rl import (
 )
 
 QUAD_MINI_TUNED_TEACHER_EXPERIMENT = "quad_mini_tuned_teacher"
+_DISTILLATION_ROLLOUT_STEPS = 24
+_DISTILLATION_ACTION_STD = 1.0e-6
 
 
 def quad_mini_tuned_ppo_runner_cfg(
@@ -57,7 +59,7 @@ def quad_mini_tuned_ppo_runner_cfg(
 
 
 def _quad_policy_model_cfg() -> RslRlModelCfg:
-  """Return the shared MLP shape used by teacher and student policies."""
+  """Return the teacher MLP configuration used during distillation."""
   return RslRlModelCfg(
     hidden_dims=(512, 256, 128),
     activation="elu",
@@ -70,13 +72,30 @@ def _quad_policy_model_cfg() -> RslRlModelCfg:
   )
 
 
+def _quad_student_policy_model_cfg() -> RslRlModelCfg:
+  """Return a student policy with effectively deterministic rollouts."""
+  cfg = _quad_policy_model_cfg()
+  assert cfg.distribution_cfg is not None
+  cfg.distribution_cfg.update(
+    {
+      "init_std": _DISTILLATION_ACTION_STD,
+      "std_range": (
+        _DISTILLATION_ACTION_STD,
+        _DISTILLATION_ACTION_STD,
+      ),
+      "learn_std": False,
+    }
+  )
+  return cfg
+
+
 @dataclass
 class QuadMiniTunedDistillationAlgorithmCfg:
   """RSL-RL behavior-cloning settings for the Quad Mini student."""
 
   class_name: str = "Distillation"
   num_learning_epochs: int = 1
-  gradient_length: int = 15
+  gradient_length: int = _DISTILLATION_ROLLOUT_STEPS
   learning_rate: float = 1.0e-3
   max_grad_norm: float = 1.0
   loss_type: str = "huber"
@@ -93,7 +112,7 @@ class QuadMiniTunedDistillationRunnerCfg(RslRlBaseRunnerCfg):
       "teacher": ("critic",),
     }
   )
-  student: RslRlModelCfg = field(default_factory=_quad_policy_model_cfg)
+  student: RslRlModelCfg = field(default_factory=_quad_student_policy_model_cfg)
   teacher: RslRlModelCfg = field(default_factory=_quad_policy_model_cfg)
   algorithm: QuadMiniTunedDistillationAlgorithmCfg = field(
     default_factory=QuadMiniTunedDistillationAlgorithmCfg
@@ -114,7 +133,7 @@ def quad_mini_tuned_distillation_runner_cfg(
     max_iterations=max_iterations,
     experiment_name=experiment_name,
   )
-  cfg.num_steps_per_env = 24
+  cfg.num_steps_per_env = _DISTILLATION_ROLLOUT_STEPS
   cfg.save_interval = 50
   cfg.clip_actions = 1.0
   return cfg

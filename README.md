@@ -69,6 +69,8 @@ The main task for each environment is:
 | TONY5 aerodynamic velocity | `Mjlab-Tony5-Velocity-Aero-v1` |
 | TONY5 aerodynamic Omni V0 | `Mjlab-Tony5-Velocity-Aero-Omni-v0` |
 | TONY5 aerodynamic Omni V3 | `Mjlab-Tony5-Velocity-Aero-Omni-v3` |
+| TONY5 position minimum-time | `Mjlab-Tony5-Position-MinTime-v5` |
+| TONY5 position minimum-time teacher | `Mjlab-Tony5-Position-MinTime-v5-Teacher` |
 
 Crawler also includes robust, rough-terrain, teacher, and student variants;
 see `src/mjlab/tasks/crawler/__init__.py` for their task IDs.
@@ -87,6 +89,8 @@ stationary vehicle at approximately 1.5 m with rotor speed initialized to
 | `Velocity-Aero-v1` | Body `vx`, body `vy`, body yaw rate, world `vz` | Radial horizontal curriculum to 27.78 m/s; `vz` −3..3 m/s | 5-frame history, 110 values |
 | `Aero-Omni-v0` | Body `vx`, body `vy`, body yaw rate, world `vz` | Radial horizontal speed ≤10 m/s; `vz` −3..3 m/s | 5-frame history, 110 values |
 | `Aero-Omni-v3` | World `vx`, world `vy`, body yaw rate, world `vz` | Radial horizontal speed ≤10 m/s; `vz` −3..3 m/s | 5-frame history, 120 values |
+| `Position-MinTime-v5` | Target position/yaw pose | 1–15 m horizontal target distance | 5-frame history, 125 values |
+| `Position-MinTime-v5-Teacher` | Full privileged target and simulator state | 1–15 m horizontal target distance | 1 frame, 65 values |
 
 The V0 ground plane remains visible but is non-colliding for the velocity
 tasks. V1 and both aerodynamic Omni tasks use the same four normalized rotor
@@ -197,6 +201,7 @@ uv run play Mjlab-Tony5-Velocity-v0
 uv run play Mjlab-Tony5-Velocity-Aero-v1
 uv run play Mjlab-Tony5-Velocity-Aero-Omni-v0
 uv run play Mjlab-Tony5-Velocity-Aero-Omni-v3
+uv run play Mjlab-Tony5-Position-MinTime-v5-Teacher
 ```
 
 To inspect V1 using only high-speed moving commands, sample a radial speed from
@@ -226,6 +231,16 @@ uv run play Mjlab-Tony5-Velocity-Aero-v1 --keyboard True
 uv run play Mjlab-Tony5-Velocity-Aero-Omni-v3 --viewer native --keyboard True
 ```
 
+The Unitree Go1 velocity tasks also support `--keyboard True`. In Go1 play,
+`W/S` commands forward/backward motion, `A/D` commands lateral motion, `Q/E`
+commands yaw, and `X` stops the command. Main or keypad `+/-` adjusts the
+horizontal command speed within the task's configured range. The Viser viewer
+provides the same direction and speed buttons:
+
+```bash
+uv run play Mjlab-Velocity-Rough-Unitree-Go1-Student --keyboard True
+```
+
 For analog gamepad control, use `--gamepad True` with the native viewer. The
 left stick controls horizontal velocity, the right-stick horizontal axis
 controls yaw, and the left/right triggers control down/up velocity. The left
@@ -235,11 +250,16 @@ and right bumpers lower/raise the horizontal speed ceiling by 1 m/s.
 uv run play Mjlab-Tony5-Velocity-Aero-Omni-v0 --gamepad True
 ```
 
-To enable V3 wind and gusts explicitly, use the following. They are already
-enabled by default in V3 play:
+To enable V3 or V5 wind and gusts explicitly, use the following. They are
+already enabled by default in play:
 
 ```bash
 uv run play Mjlab-Tony5-Velocity-Aero-Omni-v3 \
+  --viewer native \
+  --wind True \
+  --gusts True
+
+uv run play Mjlab-Tony5-Position-MinTime-v5 \
   --viewer native \
   --wind True \
   --gusts True
@@ -280,6 +300,7 @@ uv run train Mjlab-Tony5-Velocity-v0 --env.scene.num-envs 4096
 uv run train Mjlab-Tony5-Velocity-Aero-v1 --env.scene.num-envs 4096
 uv run train Mjlab-Tony5-Velocity-Aero-Omni-v0 --env.scene.num-envs 4096
 uv run train Mjlab-Tony5-Velocity-Aero-Omni-v3 --env.scene.num-envs 4096
+uv run train Mjlab-Tony5-Position-MinTime-v5-Teacher --env.scene.num-envs 4096
 ```
 
 The V0, V1, and Omni V0 policies use five flattened observation frames with

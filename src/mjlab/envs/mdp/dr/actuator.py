@@ -35,6 +35,7 @@ def pd_gains(
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
   distribution: Literal["uniform", "log_uniform"] = "uniform",
   operation: Operation | str = "scale",
+  shared_random: bool = False,
 ) -> None:
   """Randomize PD stiffness and damping gains.
 
@@ -47,6 +48,8 @@ def pd_gains(
     distribution: Distribution type ("uniform" or "log_uniform").
     operation: "scale" multiplies default gains by sampled values, "abs" sets
       absolute values.
+    shared_random: If True, sample one Kp and one Kd per environment and apply
+      those values to every selected actuator target.
   """
   op = resolve_operation(operation)
   if op.name not in ("scale", "abs"):
@@ -67,6 +70,23 @@ def pd_gains(
   else:
     actuators = [asset.actuators[asset_cfg.actuator_ids]]
 
+  dist = resolve_distribution(distribution)
+  shared_kp_samples: torch.Tensor | None = None
+  shared_kd_samples: torch.Tensor | None = None
+  if shared_random:
+    shared_kp_samples = dist.sample(
+      torch.tensor(kp_range[0], device=env.device),
+      torch.tensor(kp_range[1], device=env.device),
+      (len(env_ids), 1),
+      env.device,
+    )
+    shared_kd_samples = dist.sample(
+      torch.tensor(kd_range[0], device=env.device),
+      torch.tensor(kd_range[1], device=env.device),
+      (len(env_ids), 1),
+      env.device,
+    )
+
   for actuator in actuators:
     ctrl_ids = actuator.global_ctrl_ids
     # Each target needs one kp draw and one kd draw. For single-element
@@ -77,19 +97,24 @@ def pd_gains(
       actuator.num_targets if isinstance(actuator, BuiltinPdActuator) else len(ctrl_ids)
     )
 
-    dist = resolve_distribution(distribution)
-    kp_samples = dist.sample(
-      torch.tensor(kp_range[0], device=env.device),
-      torch.tensor(kp_range[1], device=env.device),
-      (len(env_ids), n_gains),
-      env.device,
-    )
-    kd_samples = dist.sample(
-      torch.tensor(kd_range[0], device=env.device),
-      torch.tensor(kd_range[1], device=env.device),
-      (len(env_ids), n_gains),
-      env.device,
-    )
+    if shared_random:
+      assert shared_kp_samples is not None
+      assert shared_kd_samples is not None
+      kp_samples = shared_kp_samples.expand(-1, n_gains)
+      kd_samples = shared_kd_samples.expand(-1, n_gains)
+    else:
+      kp_samples = dist.sample(
+        torch.tensor(kp_range[0], device=env.device),
+        torch.tensor(kp_range[1], device=env.device),
+        (len(env_ids), n_gains),
+        env.device,
+      )
+      kd_samples = dist.sample(
+        torch.tensor(kd_range[0], device=env.device),
+        torch.tensor(kd_range[1], device=env.device),
+        (len(env_ids), n_gains),
+        env.device,
+      )
 
     if isinstance(actuator, BuiltinPositionActuator) or (
       isinstance(actuator, XmlActuator) and actuator.command_field == "position"

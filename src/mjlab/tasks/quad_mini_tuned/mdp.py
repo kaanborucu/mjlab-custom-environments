@@ -476,14 +476,17 @@ def quad_privileged_observation(
   command_name: str,
   contact_sensor_name: str,
   asset_cfg: SceneEntityCfg = _DEFAULT_ROBOT_CFG,
+  accelerometer_sensor_name: str = "robot/imu_linacc",
+  gyro_sensor_name: str = "robot/imu_angvel",
+  gravity_sensor_name: str = "robot/upvector",
 ) -> torch.Tensor:
   """Build the source task's uncorrupted privileged critic observation."""
   asset: Entity = env.scene[asset_cfg.name]
   command = env.command_manager.get_command(command_name)
   assert command is not None
-  gravity = base_mdp.projected_gravity_from_sensor(env, "robot/upvector")
-  accelerometer = base_mdp.builtin_sensor(env, "robot/imu_linacc")
-  gyro = base_mdp.builtin_sensor(env, "robot/imu_angvel")
+  gravity = base_mdp.projected_gravity_from_sensor(env, gravity_sensor_name)
+  accelerometer = base_mdp.builtin_sensor(env, accelerometer_sensor_name)
+  gyro = base_mdp.builtin_sensor(env, gyro_sensor_name)
   joint_pos = asset.data.joint_pos - asset.data.default_joint_pos
   joint_vel = asset.data.joint_vel
   torque = torch.clamp(asset.data.qfrc_actuator, -24.0, 24.0) / 24.0

@@ -75,8 +75,16 @@ class ViserPlayViewer(BaseViewer):
     custom_action_handler: Callable[[ViewerAction, object | None], bool] | None = None,
     custom_gui_setup: Callable[[Any, Callable[[str, Any], None]], None] | None = None,
     initial_speed_multiplier: float = 1.0,
+    status_overlay: Callable[[], tuple[str, str]] | None = None,
   ) -> None:
-    super().__init__(env, policy, frame_rate, verbosity, initial_speed_multiplier)
+    super().__init__(
+      env,
+      policy,
+      frame_rate,
+      verbosity,
+      initial_speed_multiplier,
+      status_overlay,
+    )
     self._ckpt_mgr = checkpoint_manager
     self._custom_action_handler = custom_action_handler
     self._custom_gui_setup = custom_gui_setup
@@ -583,6 +591,16 @@ class ViserPlayViewer(BaseViewer):
         f"<strong>Velocity body:</strong> {velocity_b}<br/>"
         f"<strong>Velocity world:</strong> {velocity_w}<br/>"
       )
+    custom_status_line = ""
+    if self._status_overlay is not None:
+      custom_text_1, custom_text_2 = self._status_overlay()
+      custom_status_line = "<br/>".join(
+        f"<strong>{label}:</strong> {value}"
+        for label, value in zip(
+          custom_text_1.splitlines(), custom_text_2.splitlines(), strict=True
+        )
+      )
+      custom_status_line = f"{custom_status_line}<br/>"
     self._status_html.content = f"""
       <div style="font-size: 0.85em; line-height: 1.25; padding: 0 1em 0.5em 1em;">
         <strong>Status:</strong> {"Paused" if status.paused else "Running"}{capped}<br/>
@@ -590,6 +608,6 @@ class ViserPlayViewer(BaseViewer):
         <strong>Speed:</strong> {status.speed_label}<br/>
         <strong>Target RT:</strong> {status.target_realtime:.2f}x<br/>
         <strong>Actual RT:</strong> {rt_display} ({status.smoothed_fps:.0f} FPS)<br/>
-        {velocity_line}{error_line}
+        {velocity_line}{custom_status_line}{error_line}
       </div>
       """

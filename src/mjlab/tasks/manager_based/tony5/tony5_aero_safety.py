@@ -57,7 +57,12 @@ class Tony5NumericalSafetyMonitor:
     finite_value = torch.where(finite, value, torch.zeros_like(value))
     torch.maximum(destination, finite_value, out=destination)
 
-  def check(self) -> torch.Tensor:
+  def check(
+    self,
+    root_speed_limit: float = ROOT_SPEED_LIMIT,
+    body_angular_speed_limit: float = BODY_ANGULAR_SPEED_LIMIT,
+    qacc_limit: float = QACC_LIMIT,
+  ) -> torch.Tensor:
     """Check current simulator state and return persistent failure flags."""
     data = self._env.sim.data
     qpos = data.qpos
@@ -82,9 +87,9 @@ class Tony5NumericalSafetyMonitor:
       & torch.isfinite(qvel).all(dim=-1)
       & torch.isfinite(qacc).all(dim=-1)
     )
-    root_bad = torch.isfinite(root_speed) & (root_speed > ROOT_SPEED_LIMIT)
-    body_bad = torch.isfinite(body_omega) & (body_omega > BODY_ANGULAR_SPEED_LIMIT)
-    qacc_bad = torch.isfinite(max_abs_qacc) & (max_abs_qacc > QACC_LIMIT)
+    root_bad = torch.isfinite(root_speed) & (root_speed > root_speed_limit)
+    body_bad = torch.isfinite(body_omega) & (body_omega > body_angular_speed_limit)
+    qacc_bad = torch.isfinite(max_abs_qacc) & (max_abs_qacc > qacc_limit)
     invalid = nonfinite | root_bad | body_bad | qacc_bad
     new_failure = invalid & ~self.failed
 
@@ -128,6 +133,20 @@ def _monitor(env: ManagerBasedRlEnv) -> Tony5NumericalSafetyMonitor:
 def numerical_safety_failure(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Terminate V1 environments that exceed numerical safety limits."""
   return _monitor(env).check()
+
+
+def numerical_safety_failure_with_limits(
+  env: ManagerBasedRlEnv,
+  root_speed_limit: float = ROOT_SPEED_LIMIT,
+  body_angular_speed_limit: float = BODY_ANGULAR_SPEED_LIMIT,
+  qacc_limit: float = QACC_LIMIT,
+) -> torch.Tensor:
+  """Apply task-specific limits without changing the shared defaults."""
+  return _monitor(env).check(
+    root_speed_limit=root_speed_limit,
+    body_angular_speed_limit=body_angular_speed_limit,
+    qacc_limit=qacc_limit,
+  )
 
 
 def numerical_safety_failure_rate(env: ManagerBasedRlEnv) -> torch.Tensor:
@@ -181,6 +200,7 @@ __all__ = [
   "max_rotor_speed",
   "numerical_safety_body_omega_count",
   "numerical_safety_failure",
+  "numerical_safety_failure_with_limits",
   "numerical_safety_failure_rate",
   "numerical_safety_nonfinite_count",
   "numerical_safety_qacc_count",

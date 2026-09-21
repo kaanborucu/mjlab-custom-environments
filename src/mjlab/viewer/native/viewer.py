@@ -134,8 +134,16 @@ class NativeMujocoViewer(BaseViewer):
     enable_perturbations: bool = True,
     verbosity: VerbosityLevel = VerbosityLevel.SILENT,
     initial_speed_multiplier: float = 1.0,
+    status_overlay: Callable[[], tuple[str, str]] | None = None,
   ):
-    super().__init__(env, policy, frame_rate, verbosity, initial_speed_multiplier)
+    super().__init__(
+      env,
+      policy,
+      frame_rate,
+      verbosity,
+      initial_speed_multiplier,
+      status_overlay,
+    )
     self.user_key_callback = key_callback
     self.keyboard_control = keyboard_control
     self.input_poll_callback = input_poll_callback
@@ -273,6 +281,10 @@ class NativeMujocoViewer(BaseViewer):
       velocity_b, velocity_w = velocity_overlay
       text_1 += "\nRobot velocity (body)\nRobot velocity (world)"
       text_2 += f"\n{velocity_b}\n{velocity_w}"
+    if self._status_overlay is not None:
+      custom_text_1, custom_text_2 = self._status_overlay()
+      text_1 += f"\n{custom_text_1}"
+      text_2 += f"\n{custom_text_2}"
     overlay = (
       mujoco.mjtFontScale.mjFONTSCALE_150.value,
       mujoco.mjtGridPos.mjGRID_TOPLEFT.value,

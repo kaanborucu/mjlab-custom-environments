@@ -21,6 +21,9 @@ from mjlab.tasks.manager_based.tony5.tony5_omni_v3_wind import (
   Tony5OmniV3GlobalWind,
   Tony5OmniV3WindCfg,
 )
+from mjlab.tasks.manager_based.tony5.tony5_position_min_time_play import (
+  Tony5PositionMinTimeStatus,
+)
 from mjlab.tasks.manager_based.tony5.tony5_velocity_curriculum import (
   TONY5_VELOCITY_KEYBOARD_SPEED_STEP,
   TONY5_VELOCITY_MAX_YAW_RATE,
@@ -30,6 +33,7 @@ from mjlab.tasks.manager_based.tony5.tony5_velocity_curriculum import (
 )
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
+from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommand
 from mjlab.utils.os import get_checkpoint_path, get_wandb_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
@@ -71,6 +75,97 @@ def _get_latest_local_checkpoint(
     ) from exc
 
 
+_TONY5_POSITION_MIN_TIME_TASK_IDS = frozenset({"Mjlab-Tony5-Position-MinTime-v5"})
+_TONY5_V5_LEGACY_OBS_DIM = 115
+_TONY5_V5_CURRENT_OBS_DIM = 125
+_TONY5_V5_HEADING_START = 70
+_TONY5_V5_HEADING_END = 80
+
+
+def _insert_tony5_v5_heading_history(
+  value: torch.Tensor,
+  fill_value: float,
+) -> torch.Tensor:
+  """Insert the 10 heading-history values into a legacy V5 tensor."""
+  if value.shape[-1] != _TONY5_V5_LEGACY_OBS_DIM:
+    raise ValueError(
+      "Legacy TONY5 V5 observation tensors must have 115 features, got "
+      f"{value.shape[-1]}."
+    )
+  new_shape = (*value.shape[:-1], _TONY5_V5_CURRENT_OBS_DIM)
+  expanded = torch.full(
+    new_shape,
+    fill_value,
+    dtype=value.dtype,
+    device=value.device,
+  )
+  expanded[..., :_TONY5_V5_HEADING_START] = value[..., :_TONY5_V5_HEADING_START]
+  expanded[..., _TONY5_V5_HEADING_END:] = value[..., _TONY5_V5_HEADING_START:]
+  return expanded
+
+
+def _adapt_legacy_tony5_v5_actor_state(loaded_dict: dict[str, Any]) -> bool:
+  """Adapt checkpoints made before V5 added heading history observations."""
+  actor_state = loaded_dict.get("actor_state_dict")
+  if not isinstance(actor_state, dict):
+    return False
+  first_layer = actor_state.get("mlp.0.weight")
+  actor_mean = actor_state.get("obs_normalizer._mean")
+  actor_var = actor_state.get("obs_normalizer._var")
+  actor_std = actor_state.get("obs_normalizer._std")
+  tensors = (first_layer, actor_mean, actor_var, actor_std)
+  if not all(isinstance(value, torch.Tensor) for value in tensors):
+    return False
+  assert isinstance(first_layer, torch.Tensor)
+  assert isinstance(actor_mean, torch.Tensor)
+  assert isinstance(actor_var, torch.Tensor)
+  assert isinstance(actor_std, torch.Tensor)
+  normalizer_tensors: tuple[torch.Tensor, ...] = (actor_mean, actor_var, actor_std)
+  if first_layer.shape[-1] != _TONY5_V5_LEGACY_OBS_DIM:
+    return False
+  if any(value.shape[-1] != _TONY5_V5_LEGACY_OBS_DIM for value in normalizer_tensors):
+    return False
+
+  actor_state["mlp.0.weight"] = _insert_tony5_v5_heading_history(first_layer, 0.0)
+  actor_state["obs_normalizer._mean"] = _insert_tony5_v5_heading_history(
+    actor_mean, 0.0
+  )
+  actor_state["obs_normalizer._var"] = _insert_tony5_v5_heading_history(actor_var, 1.0)
+  actor_state["obs_normalizer._std"] = _insert_tony5_v5_heading_history(actor_std, 1.0)
+  return True
+
+
+def _load_play_checkpoint(
+  runner: Any,
+  path: Path,
+  task_id: str,
+  device: str,
+) -> None:
+  """Load a play checkpoint with V5 legacy-observation compatibility."""
+  if task_id in _TONY5_POSITION_MIN_TIME_TASK_IDS:
+    loaded_dict = torch.load(path, map_location=device, weights_only=False)
+    if _adapt_legacy_tony5_v5_actor_state(loaded_dict):
+      runner.alg.load(loaded_dict, {"actor": True}, strict=True)
+      runner.current_learning_iteration = int(loaded_dict.get("iter", 0))
+      print(
+        "[WARN]: Loaded a legacy 115-input V5 checkpoint. The new heading "
+        "history inputs are disabled for this actor; retrain for the current "
+        "125-input observation policy."
+      )
+      return
+
+  try:
+    runner.load(str(path), load_cfg={"actor": True}, strict=True, map_location=device)
+  except RuntimeError as exc:
+    if "size mismatch" in str(exc):
+      raise RuntimeError(
+        f"Checkpoint {path} is incompatible with the current {task_id} "
+        "observation layout. Train a fresh checkpoint for this environment "
+        "or use `--agent zero`/`--agent random` for visualization."
+      ) from exc
+    raise
+
+
 @dataclass(frozen=True)
 class PlayConfig:
   agent: Literal["zero", "random", "trained"] = "trained"
@@ -99,7 +194,7 @@ class PlayConfig:
   high_speed_max: float = 27.78
   """Upper horizontal-speed bound for ``--high-speed-only`` play mode."""
   keyboard: bool = False
-  """Enable TONY5 V1 keyboard velocity control in play mode."""
+  """Enable keyboard velocity control in play mode."""
   gamepad: bool = False
   """Enable native-viewer analog gamepad velocity control in play mode."""
   disturbance: bool = False
@@ -248,6 +343,119 @@ class Tony5KeyboardController:
       @vertical_buttons.on_click
       def _(event) -> None:
         mode = "up" if event.target.value == "Up" else "down"
+        request_action("CUSTOM", {"type": "keyboard_mode", "mode": mode})
+
+      yaw_buttons = server.gui.add_button_group(
+        "Yaw", options=["Yaw left", "Yaw right"]
+      )
+
+      @yaw_buttons.on_click
+      def _(event) -> None:
+        mode = "yaw_left" if event.target.value == "Yaw left" else "yaw_right"
+        request_action("CUSTOM", {"type": "keyboard_mode", "mode": mode})
+
+    self._refresh_status()
+
+
+class UniformVelocityKeyboardController:
+  """Keyboard and Viser control for standard twist velocity commands."""
+
+  _SPEED_STEP = 0.25
+
+  def __init__(self, env: ManagerBasedRlEnv):
+    command = env.command_manager.get_term("twist")
+    if not isinstance(command, UniformVelocityCommand):
+      raise ValueError(
+        "Go1 keyboard control requires the standard `twist` velocity command."
+      )
+    self.command = command
+    self.command.enable_keyboard_control()
+    self._status_html: Any | None = None
+
+  def _refresh_status(self) -> None:
+    if self._status_html is not None:
+      self._status_html.content = (
+        "<strong>Keyboard velocity control</strong><br/>"
+        f"Mode: {self.command.keyboard_mode}<br/>"
+        f"Max horizontal speed: {self.command.keyboard_max_speed:.2f} m/s"
+      )
+
+  def handle_action(self, action: ViewerAction, payload: object | None) -> bool:
+    """Apply a queued keyboard or GUI action on the simulation thread."""
+    if action != ViewerAction.CUSTOM or not isinstance(payload, dict):
+      return False
+    payload_dict = cast(dict[str, object], payload)
+    if payload_dict.get("type") == "keyboard_mode":
+      self.command.set_keyboard_mode(str(payload_dict["mode"]))
+    elif payload_dict.get("type") == "keyboard_speed":
+      self.command.adjust_keyboard_max_speed(float(cast(float, payload_dict["delta"])))
+    elif payload_dict.get("type") == "keyboard_key":
+      self._handle_key(int(cast(int, payload_dict["key"])))
+    else:
+      return False
+    self._refresh_status()
+    return True
+
+  def _handle_key(self, key: int) -> None:
+    """Translate native GLFW key codes into Go1 velocity modes."""
+    from mjlab.viewer.native.keys import (
+      KEY_A,
+      KEY_D,
+      KEY_E,
+      KEY_EQUAL,
+      KEY_KP_ADD,
+      KEY_KP_SUBTRACT,
+      KEY_MINUS,
+      KEY_Q,
+      KEY_S,
+      KEY_W,
+      KEY_X,
+    )
+
+    modes = {
+      KEY_W: "forward",
+      KEY_S: "backward",
+      KEY_A: "left",
+      KEY_D: "right",
+      KEY_Q: "yaw_left",
+      KEY_E: "yaw_right",
+      KEY_X: "hover",
+    }
+    if key in (KEY_EQUAL, KEY_KP_ADD):
+      self.command.adjust_keyboard_max_speed(self._SPEED_STEP)
+    elif key in (KEY_MINUS, KEY_KP_SUBTRACT):
+      self.command.adjust_keyboard_max_speed(-self._SPEED_STEP)
+    elif key in modes:
+      self.command.set_keyboard_mode(modes[key])
+
+  def create_viser_gui(
+    self,
+    server: Any,
+    request_action: Callable[[str, Any], None],
+  ) -> None:
+    """Create button controls for keyboard-equivalent Viser input."""
+    with server.gui.add_folder("Keyboard Velocity"):
+      self._status_html = server.gui.add_html("")
+      speed_buttons = server.gui.add_button_group("Max speed (m/s)", options=["-", "+"])
+
+      @speed_buttons.on_click
+      def _(event) -> None:
+        delta = self._SPEED_STEP if event.target.value == "+" else -self._SPEED_STEP
+        request_action("CUSTOM", {"type": "keyboard_speed", "delta": delta})
+
+      direction_buttons = server.gui.add_button_group(
+        "Direction", options=["Forward", "Backward", "Left", "Right", "Hover"]
+      )
+
+      @direction_buttons.on_click
+      def _(event) -> None:
+        mode = {
+          "Forward": "forward",
+          "Backward": "backward",
+          "Left": "left",
+          "Right": "right",
+          "Hover": "hover",
+        }[event.target.value]
         request_action("CUSTOM", {"type": "keyboard_mode", "mode": mode})
 
       yaw_buttons = server.gui.add_button_group(
@@ -574,14 +782,27 @@ def run_play(task_id: str, cfg: PlayConfig):
     "Mjlab-Tony5-Velocity-Aero-v1",
     "Mjlab-Tony5-Velocity-Aero-Omni-v0",
     "Mjlab-Tony5-Velocity-Aero-Omni-v3",
+    "Mjlab-Velocity-Flat-Unitree-Go1",
+    "Mjlab-Velocity-Rough-Unitree-Go1",
+    "Mjlab-Velocity-Flat-Unitree-Go1-Teacher",
+    "Mjlab-Velocity-Flat-Unitree-Go1-Student",
+    "Mjlab-Velocity-Rough-Unitree-Go1-Teacher",
+    "Mjlab-Velocity-Rough-Unitree-Go1-Student",
   }
-  disturbance_task_ids = keyboard_task_ids | {
+  tony5_keyboard_task_ids = {
+    "Mjlab-Tony5-Velocity-Aero-v1",
+    "Mjlab-Tony5-Velocity-Aero-Omni-v0",
     "Mjlab-Tony5-Velocity-Aero-Omni-v3",
   }
-  if (cfg.keyboard or cfg.gamepad) and task_id not in keyboard_task_ids:
+  disturbance_task_ids = tony5_keyboard_task_ids | {
+    "Mjlab-Tony5-Velocity-Aero-Omni-v3",
+  }
+  if cfg.keyboard and task_id not in keyboard_task_ids:
     raise ValueError(
-      "--keyboard and --gamepad are supported only for the TONY5 Aero velocity tasks."
+      "--keyboard is supported only for TONY5 Aero and Unitree Go1 velocity tasks."
     )
+  if cfg.gamepad and task_id not in tony5_keyboard_task_ids:
+    raise ValueError("--gamepad is supported only for the TONY5 Aero velocity tasks.")
   if cfg.disturbance and task_id not in disturbance_task_ids:
     raise ValueError(
       "--disturbance is supported only for the TONY5 Aero velocity tasks."
@@ -608,7 +829,12 @@ def run_play(task_id: str, cfg: PlayConfig):
   env_cfg = load_env_cfg(task_id, play=True)
   agent_cfg = load_rl_cfg(task_id)
 
-  if task_id == "Mjlab-Tony5-Velocity-Aero-Omni-v3":
+  wind_task_ids = {
+    "Mjlab-Tony5-Velocity-Aero-Omni-v3",
+    "Mjlab-Tony5-Position-MinTime-v5",
+    "Mjlab-Tony5-Position-MinTime-v5-Teacher",
+  }
+  if task_id in wind_task_ids:
     action_cfg = env_cfg.actions.get("rotor_speed")
     wind_cfg = getattr(action_cfg, "wind", None)
     if isinstance(wind_cfg, Tony5OmniV3WindCfg):
@@ -616,7 +842,7 @@ def run_play(task_id: str, cfg: PlayConfig):
       wind_cfg.enable_gusts = cfg.gusts
       wind_cfg.reset_enable_probability = 1.0 if (cfg.wind or cfg.gusts) else 0.0
       print(
-        "[INFO]: V3 play wind: "
+        f"[INFO]: {task_id} play wind: "
         f"background={'on' if cfg.wind else 'off'}, "
         f"gusts={'on' if cfg.gusts else 'off'}, "
         f"episode_activation={'100%' if (cfg.wind or cfg.gusts) else '0%'}"
@@ -760,10 +986,19 @@ def run_play(task_id: str, cfg: PlayConfig):
       "[WARN] Video recording with dummy agents is disabled (no checkpoint/log_dir)."
     )
   env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
-  velocity_command = env.command_manager.get_term("velocity")
+  status_overlay = (
+    Tony5PositionMinTimeStatus(env)
+    if task_id == "Mjlab-Tony5-Position-MinTime-v5"
+    else None
+  )
+  velocity_command = (
+    env.command_manager.get_term("velocity")
+    if "velocity" in env.command_manager.active_terms
+    else None
+  )
   resampler: Tony5PlayResampler | None = None
   wind: Tony5OmniV3GlobalWind | None = None
-  if task_id == "Mjlab-Tony5-Velocity-Aero-Omni-v3":
+  if task_id in wind_task_ids:
     action_term = env.action_manager.get_term("rotor_speed")
     candidate_wind = getattr(action_term, "wind", None)
     if isinstance(candidate_wind, Tony5OmniV3GlobalWind):
@@ -805,24 +1040,38 @@ def run_play(task_id: str, cfg: PlayConfig):
   else:
     runner_cls = load_runner_cls(task_id) or MjlabOnPolicyRunner
     runner = runner_cls(env, asdict(agent_cfg), device=device)
-    runner.load(
-      str(resume_path), load_cfg={"actor": True}, strict=True, map_location=device
-    )
+    assert resume_path is not None
+    _load_play_checkpoint(runner, resume_path, task_id, device)
     policy = runner.get_inference_policy(device=device)
 
-  keyboard_controller: Tony5KeyboardController | None = None
+  keyboard_controller: (
+    Tony5KeyboardController | UniformVelocityKeyboardController | None
+  ) = None
   gamepad_controller: Tony5GamepadController | None = None
   if cfg.keyboard:
-    keyboard_controller = Tony5KeyboardController(
-      env.unwrapped,
-      resample_callback=resampler.resample if resampler is not None else None,
-    )
-    print(
-      "[INFO] Keyboard velocity control enabled: "
-      "W/S forward, A/D lateral, Q/E yaw, R/F vertical, X hover, "
-      "+/- (or keypad +/-) decrease/increase max speed (up to 100 m/s), M "
-      "resamples velocity and wind"
-    )
+    if isinstance(velocity_command, Tony5RadialVelocityCommand):
+      keyboard_controller = Tony5KeyboardController(
+        env.unwrapped,
+        resample_callback=resampler.resample if resampler is not None else None,
+      )
+      print(
+        "[INFO] Keyboard velocity control enabled: "
+        "W/S forward, A/D lateral, Q/E yaw, R/F vertical, X hover, "
+        "+/- (or keypad +/-) decrease/increase max speed (up to 100 m/s), M "
+        "resamples velocity and wind"
+      )
+    elif isinstance(velocity_command, UniformVelocityCommand):
+      keyboard_controller = UniformVelocityKeyboardController(env.unwrapped)
+      print(
+        "[INFO] Go1 keyboard velocity control enabled: "
+        "W/S forward, A/D lateral, Q/E yaw, X hover, +/- (or keypad +/-) "
+        "adjust speed"
+      )
+    else:
+      raise ValueError(
+        "Keyboard control requires a supported velocity command: `velocity` "
+        "for TONY5 or `twist` for Go1."
+      )
   if cfg.gamepad:
     gamepad_controller = Tony5GamepadController(env.unwrapped)
 
@@ -852,12 +1101,7 @@ def run_play(task_id: str, cfg: PlayConfig):
     _ckpt_runner = runner  # pyright: ignore[reportPossiblyUnboundVariable]
 
     def _reload_policy(path: str):
-      _ckpt_runner.load(
-        path,
-        load_cfg={"actor": True},
-        strict=True,
-        map_location=device,
-      )
+      _load_play_checkpoint(_ckpt_runner, Path(path), task_id, device)
       loaded_policy = _ckpt_runner.get_inference_policy(device=device)
       if disturbance is not None:
         return DisturbedPolicy(loaded_policy, disturbance)
@@ -978,6 +1222,7 @@ def run_play(task_id: str, cfg: PlayConfig):
       ),
       custom_action_handler=handle_custom_action if has_custom_controls else None,
       initial_speed_multiplier=cfg.playback_speed,
+      status_overlay=status_overlay,
     )
     native_viewer.run()
   elif resolved_viewer == "viser":
@@ -988,6 +1233,7 @@ def run_play(task_id: str, cfg: PlayConfig):
       custom_action_handler=handle_custom_action if has_custom_controls else None,
       custom_gui_setup=create_viser_controls if has_custom_controls else None,
       initial_speed_multiplier=cfg.playback_speed,
+      status_overlay=status_overlay,
     ).run()
   else:
     raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")

@@ -48,6 +48,22 @@ class UniformVelocityCommand(CommandTerm):
     self.is_world_env = torch.zeros_like(self.is_heading_env)
     self.is_forward_env = torch.zeros_like(self.is_heading_env)
 
+    # These are enabled only by play-mode keyboard control. Training keeps the
+    # normal sampled-command behavior unchanged.
+    self._keyboard_enabled = False
+    self._keyboard_max_speed = max(
+      abs(self.cfg.ranges.lin_vel_x[0]),
+      abs(self.cfg.ranges.lin_vel_x[1]),
+      abs(self.cfg.ranges.lin_vel_y[0]),
+      abs(self.cfg.ranges.lin_vel_y[1]),
+    )
+    self._keyboard_speed_limit = self._keyboard_max_speed
+    self._keyboard_max_yaw_rate = max(
+      abs(self.cfg.ranges.ang_vel_z[0]), abs(self.cfg.ranges.ang_vel_z[1])
+    )
+    self._keyboard_mode = "hover"
+    self._keyboard_command = torch.zeros_like(self.vel_command_b)
+
     self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
     if self.cfg.ranges.lin_vel_z is not None:
       self.metrics["error_vel_z"] = torch.zeros(self.num_envs, device=self.device)
@@ -153,6 +169,97 @@ class UniformVelocityCommand(CommandTerm):
         self.robot.write_root_link_velocity_b_to_sim(vel_b, env_ids=init_ids)
     return extras
 
+  # Play-mode keyboard control.
+
+  @property
+  def keyboard_mode(self) -> str:
+    """Current keyboard command mode."""
+    return self._keyboard_mode
+
+  @property
+  def keyboard_max_speed(self) -> float:
+    """Current horizontal keyboard speed in m/s."""
+    return self._keyboard_max_speed
+
+  def enable_keyboard_control(self) -> None:
+    """Enable a persistent manual command override for play mode."""
+    self._keyboard_enabled = True
+    self._keyboard_mode = "hover"
+    self._set_keyboard_command()
+
+  def set_keyboard_mode(self, mode: str) -> None:
+    """Set the persistent keyboard velocity mode."""
+    valid_modes = {
+      "forward",
+      "backward",
+      "left",
+      "right",
+      "yaw_left",
+      "yaw_right",
+      "hover",
+    }
+    if mode not in valid_modes:
+      raise ValueError(f"Unknown velocity keyboard mode: {mode}")
+    self._keyboard_mode = mode
+    self._set_keyboard_command()
+
+  def adjust_keyboard_max_speed(self, delta: float) -> None:
+    """Adjust keyboard speed within the task's configured command range."""
+    self._keyboard_max_speed = float(
+      min(
+        self._keyboard_speed_limit,
+        max(0.1, self._keyboard_max_speed + delta),
+      )
+    )
+    self._set_keyboard_command()
+
+  def _set_keyboard_command(self) -> None:
+    self._keyboard_command.zero_()
+    speed = self._keyboard_max_speed
+    mode = self._keyboard_mode
+    if mode == "forward":
+      self._keyboard_command[:, 0] = self._clamp_keyboard_value(
+        speed, self.cfg.ranges.lin_vel_x
+      )
+    elif mode == "backward":
+      self._keyboard_command[:, 0] = self._clamp_keyboard_value(
+        -speed, self.cfg.ranges.lin_vel_x
+      )
+    elif mode == "left":
+      self._keyboard_command[:, 1] = self._clamp_keyboard_value(
+        speed, self.cfg.ranges.lin_vel_y
+      )
+    elif mode == "right":
+      self._keyboard_command[:, 1] = self._clamp_keyboard_value(
+        -speed, self.cfg.ranges.lin_vel_y
+      )
+    elif mode == "yaw_left":
+      self._keyboard_command[:, 2] = self._clamp_keyboard_value(
+        self._keyboard_max_yaw_rate, self.cfg.ranges.ang_vel_z
+      )
+    elif mode == "yaw_right":
+      self._keyboard_command[:, 2] = self._clamp_keyboard_value(
+        -self._keyboard_max_yaw_rate, self.cfg.ranges.ang_vel_z
+      )
+    self._apply_keyboard_command()
+
+  def _apply_keyboard_command(self, env_ids: torch.Tensor | None = None) -> None:
+    """Apply the manual command immediately and after command updates."""
+    target = slice(None) if env_ids is None else env_ids
+    self.vel_command_b[target] = self._keyboard_command[target]
+    self.vel_command_w[target] = 0.0
+    self.vel_command_w[target, :2] = self._keyboard_command[target, :2]
+    if self.vel_command_b.shape[1] > 3:
+      self.vel_command_w[target, 2] = self._keyboard_command[target, 3]
+    self.is_standing_env[target] = False
+    self.is_heading_env[target] = False
+    self.is_world_env[target] = False
+    self.is_forward_env[target] = False
+
+  @staticmethod
+  def _clamp_keyboard_value(value: float, bounds: tuple[float, float]) -> float:
+    return min(bounds[1], max(bounds[0], value))
+
   def _sample_ellipsoid_linear_velocity(self, env_ids: torch.Tensor) -> None:
     """Sample directions and radii uniformly within a configured ellipsoid."""
     ranges = [self.cfg.ranges.lin_vel_x, self.cfg.ranges.lin_vel_y]
@@ -209,6 +316,9 @@ class UniformVelocityCommand(CommandTerm):
     standing_env_ids = active_env_ids[self.is_standing_env[active_env_ids]]
     self.vel_command_b[standing_env_ids, :] = 0.0
     self.vel_command_w[standing_env_ids, :] = 0.0
+
+    if self._keyboard_enabled:
+      self._apply_keyboard_command(active_env_ids)
 
   # GUI.
 

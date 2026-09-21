@@ -23,6 +23,7 @@ from .geom import geom_size as geom_size
 # Body.
 # isort: split
 from .body import body_com_offset as body_com_offset
+from .body import body_inertia as body_inertia
 from .body import body_ipos as body_ipos
 from .body import body_mass as body_mass
 from .body import body_pos as body_pos

@@ -11,6 +11,10 @@ from mjlab.rl import (
 )
 from mjlab.tasks.crawler.constants import PPO_ROLLOUT_STEPS
 
+CRAWLER_ROUGH_TEACHER_EXPERIMENT = "crawler_3dof_rough_teacher"
+CRAWLER_FLAT_TEACHER_EXPERIMENT = "crawler_3dof_flat_teacher"
+_DISTILLATION_ACTION_STD = 1.0e-6
+
 
 def crawler_ppo_runner_cfg(
   max_iterations: int = 600,
@@ -71,13 +75,30 @@ def _crawler_policy_model_cfg() -> RslRlModelCfg:
   )
 
 
+def _crawler_student_policy_model_cfg() -> RslRlModelCfg:
+  """Return a student policy with effectively deterministic rollouts."""
+  cfg = _crawler_policy_model_cfg()
+  assert cfg.distribution_cfg is not None
+  cfg.distribution_cfg.update(
+    {
+      "init_std": _DISTILLATION_ACTION_STD,
+      "std_range": (
+        _DISTILLATION_ACTION_STD,
+        _DISTILLATION_ACTION_STD,
+      ),
+      "learn_std": False,
+    }
+  )
+  return cfg
+
+
 @dataclass
 class CrawlerDistillationAlgorithmCfg:
   """RSL-RL distillation algorithm settings."""
 
   class_name: str = "Distillation"
   num_learning_epochs: int = 1
-  gradient_length: int = 15
+  gradient_length: int = PPO_ROLLOUT_STEPS
   learning_rate: float = 1.0e-3
   max_grad_norm: float = 1.0
   loss_type: str = "huber"
@@ -94,7 +115,7 @@ class CrawlerDistillationRunnerCfg(RslRlBaseRunnerCfg):
       "teacher": ("critic",),
     }
   )
-  student: RslRlModelCfg = field(default_factory=_crawler_policy_model_cfg)
+  student: RslRlModelCfg = field(default_factory=_crawler_student_policy_model_cfg)
   teacher: RslRlModelCfg = field(default_factory=_crawler_policy_model_cfg)
   algorithm: CrawlerDistillationAlgorithmCfg = field(
     default_factory=CrawlerDistillationAlgorithmCfg
@@ -102,16 +123,22 @@ class CrawlerDistillationRunnerCfg(RslRlBaseRunnerCfg):
   experiment_name: str = "crawler_3dof_rough_student"
   logger: Literal["wandb", "tensorboard"] = "tensorboard"
   upload_model: bool = False
+  teacher_checkpoint: str | None = None
+  """Optional local PPO checkpoint used to initialize the teacher policy."""
+  teacher_experiment_name: str = CRAWLER_ROUGH_TEACHER_EXPERIMENT
+  """Teacher experiment searched when no explicit checkpoint is provided."""
 
 
 def crawler_distillation_runner_cfg(
   max_iterations: int = 5000,
   experiment_name: str = "crawler_3dof_rough_student",
+  teacher_experiment_name: str = CRAWLER_ROUGH_TEACHER_EXPERIMENT,
 ) -> CrawlerDistillationRunnerCfg:
   """Return a crawler student distillation configuration."""
   cfg = CrawlerDistillationRunnerCfg(
     max_iterations=max_iterations,
     experiment_name=experiment_name,
+    teacher_experiment_name=teacher_experiment_name,
   )
   cfg.num_steps_per_env = PPO_ROLLOUT_STEPS
   cfg.save_interval = 50
