@@ -58,7 +58,7 @@
     <link rel="prev" title="Research" href="research.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-    <meta name="docbuild:last-update" content="Aug 24, 2026"/>
+    <meta name="docbuild:last-update" content="Sep 21, 2026"/>
   </head>
   
   
@@ -560,9 +560,16 @@ W&amp;B run path is provided.</p></li>
 local teacher-checkpoint loading for distillation.</p></li>
 <li><p>Added automatic selection of the latest local Quad Mini teacher checkpoint
 when starting student distillation.</p></li>
+<li><p>Exposed the Go1 reward weights in its task config and show every reward term
+in the viewer reward panel.</p></li>
 <li><p>Added a staged domain-randomization curriculum for the Quad Mini teacher that
 starts from nominal dynamics and reaches the existing full ranges after 5,000
 PPO iterations.</p></li>
+<li><p>Added teacher and student variants of the original flat Unitree Go1 task,
+preserving its full environment configuration while using one-frame
+privileged teacher observations.</p></li>
+<li><p>Added matching rough-terrain Go1 teacher and student tasks with one-frame
+privileged observations and separate teacher checkpoint directories.</p></li>
 <li><p>Added the TONY5 V0 individual-rotor-speed position+yaw quadrotor task with
 physical rotor bodies, voltage-driven DC motor actuators with a measured-speed
 PID loop, and per-substep thrust and aerodynamic rotor-drag physics.</p></li>
@@ -595,11 +602,65 @@ smoke checks.</p></li>
 CT/CQ fallback, blade flapping, battery sag, wind, and gusts.</p></li>
 <li><p>Made V3 wind and gust activation a shared 50% full-reset event; disabled
 resets run with both external wind effects off.</p></li>
+<li><p>Added the fresh <code class="docutils literal notranslate"><span class="pre">Mjlab-Tony5-Position-MinTime-v5</span></code> target-pose task with
+fixed 1–15 m episode targets, 125-input history observations, explicit
+success/safety rewards, V3 randomized wind and gusts, episode diagnostics, and play
+status overlays.</p></li>
+<li><p>Added the privileged <code class="docutils literal notranslate"><span class="pre">Mjlab-Tony5-Position-MinTime-v5-Teacher</span></code> task with
+one-frame simulator state observations and a compact <code class="docutils literal notranslate"><span class="pre">256/128/64</span></code> PPO
+actor and critic.</p></li>
 </ul>
 </section>
 <section id="changed">
 <h3>Changed<a class="headerlink" href="#changed" title="Link to this heading">#</a></h3>
 <ul class="simple">
+<li><p>Added absolute heading and body-frame linear-velocity observations and a
+longer discount horizon to the TONY5 V5 minimum-time task.</p></li>
+<li><p>Simplified TONY5 V5 minimum-time rewards to distance progress, time, action
+rate, motor torque, success, crash, and smooth settling terms; final yaw and
+braking remain success-condition requirements rather than separate target-rate
+tracking.</p></li>
+<li><p>Added a small smooth near-target settling cost that fades in with proximity
+and penalizes residual linear/angular motion without a hard reward switch.</p></li>
+<li><p>Added yaw-error progress to the minimum-time distance-progress reward,
+tightened the position success tolerance by 25%, tightened yaw success to
+5 degrees, set linear speed success to 0.5 and angular speed success to
+0.75, and expanded
+target ranges to 1–15 m.</p></li>
+<li><p>Registered V5 wind and gust processes with play-mode visualization and
+<code class="docutils literal notranslate"><span class="pre">--wind</span></code>/<code class="docutils literal notranslate"><span class="pre">--gusts</span></code> overrides.</p></li>
+<li><p>Made V5 play compatible with legacy 115-input actor checkpoints by inserting
+neutral heading-history inputs; current 125-input checkpoints load unchanged.</p></li>
+<li><p>Treat body angular speeds above 20 rad/s as V5 safety failures and strengthen
+V5 exploration so high-speed yaw cannot become a timeout policy.</p></li>
+<li><p>Fixed crawler student distillation to load the latest matching flat or rough
+teacher checkpoint, use deterministic student actions, and optimize every
+collected rollout step.</p></li>
+<li><p>Set the custom rough Go1 teacher and student tasks to use 4096 environments
+with memory-safe CCD and contact-sensor defaults; the original Go1 rough task
+remains unchanged.</p></li>
+<li><p>Randomize the custom Go1 actuator gains at reset, using one shared Kp in
+25–45 and one shared Kd in 1.0–2.5 for all actuators in the flat and rough
+teacher and student tasks.</p></li>
+<li><p>Added reset-time mass, inertia, COM, friction, damping, effort, initial-state,
+and push randomization to the custom flat and rough Go1 teacher and student
+tasks; the original Go1 tasks remain unchanged.</p></li>
+<li><p>Added an editable negative squared joint-torque reward to the custom Go1
+flat and rough teacher and student tasks, initially weighted at <code class="docutils literal notranslate"><span class="pre">-1e-5</span></code>.</p></li>
+<li><p>Added native and Viser keyboard velocity control to the Go1 velocity play
+tasks; training command sampling remains unchanged.</p></li>
+<li><p>Expose editable flat and rough Go1 reward-weight tables shared by each
+terrain’s teacher and student tasks.</p></li>
+<li><p>Restored the Quad Mini’s native MuJoCo position actuators and locomotion
+reward shaping. Native implicit PD control prevents the leg oscillation caused
+by explicit torque control at the 4 ms simulation timestep.</p></li>
+<li><p>Simplified V5 rewards to distance progress, time penalty, success, crash, and
+small action-rate/motor-torque penalties, leaving braking and yaw correction
+to the success condition; success tolerances are half the original size.</p></li>
+<li><p>Set the V5 numerical safety limits to a 100 m/s root-speed limit and a strict
+<code class="docutils literal notranslate"><span class="pre">qacc</span> <span class="pre">&gt;</span> <span class="pre">300,000</span></code> failure threshold; existing V3 safety defaults are unchanged.</p></li>
+<li><p>Loosened V5 success tolerances by 1.5x to increase the chance of accepting a
+completed target pose while retaining all four success conditions.</p></li>
 <li><p>Updated the project README with the current TONY5 task matrix, environment
 parameters, editable reward locations, training/resume commands, checkpoint
 behavior, wind/gust controls, disturbances, and keyboard/gamepad play input.</p></li>
@@ -764,6 +825,15 @@ before sending them to the actuators.</p></li>
 <section id="fixed">
 <h3>Fixed<a class="headerlink" href="#fixed" title="Link to this heading">#</a></h3>
 <ul class="simple">
+<li><p>Made Quad Mini-derived student distillation rollouts effectively
+deterministic and aligned gradient accumulation with the rollout length, so
+permanent action noise no longer destabilizes training or drops rollout
+batches from optimization.</p></li>
+<li><p>Added selective five-frame proprioceptive and previous-action history to the
+original Go1 students so they can infer the privileged teacher’s foot state
+without replicating the large terrain scan across every history frame.</p></li>
+<li><p>Matched original Go1 student action handling to its unclipped teacher so the
+environment executes the actions used as behavior-distillation targets.</p></li>
 <li><p>Fixed Quad Mini default-pose randomization so <code class="docutils literal notranslate"><span class="pre">qpos0</span></code> remains a small joint
 reference offset instead of cancelling the configured standing pose.</p></li>
 <li><p>Matched the Quad Mini foot-clearance cost to MuJoCo Playground and fixed the
@@ -1969,7 +2039,7 @@ By The mjlab Developers
   
   <div class="footer-item">
     <p class="last-updated">
-  Last updated on Aug 24, 2026.
+  Last updated on Sep 21, 2026.
   <br/>
 </p>
   </div>
